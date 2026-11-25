@@ -46,11 +46,11 @@ def upgrade() -> None:
             size_bytes INTEGER,
             storage_provider VARCHAR(20) NOT NULL DEFAULT 'local',
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        CREATE INDEX IF NOT EXISTS ix_stored_files_event_id ON stored_files (event_id);
-        CREATE INDEX IF NOT EXISTS ix_stored_files_participant_id ON stored_files (participant_id);
-        CREATE INDEX IF NOT EXISTS ix_stored_files_object_key ON stored_files (object_key);
+        )
     """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_stored_files_event_id ON stored_files (event_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_stored_files_participant_id ON stored_files (participant_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_stored_files_object_key ON stored_files (object_key)")
 
 
 def downgrade() -> None:

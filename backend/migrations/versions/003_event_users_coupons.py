@@ -33,24 +33,24 @@ def upgrade() -> None:
             user_agent VARCHAR(255),
             request_id VARCHAR(64),
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        CREATE INDEX IF NOT EXISTS ix_audit_log_actor_id ON audit_log (actor_id);
-        CREATE INDEX IF NOT EXISTS ix_audit_log_action ON audit_log (action);
-        CREATE INDEX IF NOT EXISTS ix_audit_log_entity ON audit_log (entity);
-        CREATE INDEX IF NOT EXISTS ix_audit_log_request_id ON audit_log (request_id);
+        )
     """)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_audit_log_actor_id ON audit_log (actor_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_audit_log_action ON audit_log (action)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_audit_log_entity ON audit_log (entity)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_audit_log_request_id ON audit_log (request_id)")
 
     # 1. Add event_id and password_changed_at to users
     op.add_column("users", sa.Column("event_id", sa.Integer, sa.ForeignKey("events.id", ondelete="SET NULL"), nullable=True))
     op.create_index("ix_users_event_id", "users", ["event_id"])
     op.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ")
 
-    # 2. Add coupon_code and ensure defaults on participants
-    op.execute("""
-        ALTER TABLE participants ADD COLUMN IF NOT EXISTS coupon_code VARCHAR(50);
-        ALTER TABLE participants ALTER COLUMN source SET DEFAULT 'ONLINE';
-        ALTER TABLE participants ALTER COLUMN status SET DEFAULT 'CONFIRMED';
-    """)
+    # 2. Add coupon_code, source, and status on participants
+    op.execute("ALTER TABLE participants ADD COLUMN IF NOT EXISTS coupon_code VARCHAR(50)")
+    op.execute("ALTER TABLE participants ADD COLUMN IF NOT EXISTS source VARCHAR(9) NOT NULL DEFAULT 'ONLINE'")
+    op.execute("ALTER TABLE participants ADD COLUMN IF NOT EXISTS status VARCHAR(15) NOT NULL DEFAULT 'CONFIRMED'")
+    op.execute("ALTER TABLE participants ALTER COLUMN source SET DEFAULT 'ONLINE'")
+    op.execute("ALTER TABLE participants ALTER COLUMN status SET DEFAULT 'CONFIRMED'")
 
     # 3. Create coupons table
     op.create_table(
@@ -153,6 +153,9 @@ def upgrade() -> None:
         ('ROBOT2026', 2, 'NRS One-Time Speaker Pass', 1, 0, true, NOW())
         ON CONFLICT ON CONSTRAINT uq_event_coupon_code DO NOTHING
     """)
+
+    # 10. Sync events_id_seq after explicit id=1 and id=2 inserts
+    op.execute("SELECT setval(pg_get_serial_sequence('events', 'id'), COALESCE((SELECT MAX(id) FROM events), 1))")
 
 
 def downgrade() -> None:

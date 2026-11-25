@@ -18,16 +18,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Add SUPER_ADMIN to user_role enum
-    # NOTE: PostgreSQL requires a COMMIT before using a newly-added enum value.
-    # We use op.get_bind() with a non-transactional execution to work around this.
-    op.execute("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'SUPER_ADMIN'")
-
-    # Commit the transaction so PostgreSQL makes the new enum value visible
-    op.execute("COMMIT")
-
-    # Start a fresh transaction for the remaining DDL
-    op.execute("BEGIN")
+    # 1. Add SUPER_ADMIN to user_role enum (requires autocommit outside transaction)
+    with op.get_context().autocommit_block():
+        op.execute("ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'SUPER_ADMIN'")
 
     # 2. Add form builder columns to events table
     op.execute("""
