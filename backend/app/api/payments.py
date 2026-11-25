@@ -90,7 +90,7 @@ async def create_order(body: CreateOrderRequest, db: AsyncSession = Depends(get_
             "customer_name": body.customer_name,
         },
         "order_meta": {
-            "notify_url": f"{settings.BACKEND_URL}/api/payments/webhook",
+            "notify_url": f"{settings.effective_backend_url}/api/payments/webhook",
         },
     }
 
