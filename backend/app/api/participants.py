@@ -19,8 +19,8 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
-from sqlalchemy import func, or_, select, text
+from fastapi.responses import FileResponse, Response
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -33,13 +33,15 @@ from app.models.models import (
     FaceEmbedding,
     Participant,
     ParticipantCategory,
+    StoredFile,
     User,
 )
 from app.schemas.schemas import AttendanceOut, ParticipantDetail, ParticipantList, ParticipantOut, ParticipantUpdate
+from app.services import storage_service
 from app.services.audit import audit_log
 from app.services.email_service import send_qr_email
-from app.services.embedding_service import generate_embedding
-from app.services.qr_service import generate_qr_code
+from app.services.embedding_service import generate_embedding, generate_embedding_from_bytes
+from app.services.qr_service import generate_qr_code, generate_qr_code_for_event
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +84,8 @@ async def register_participant(
     institution: Optional[str] = Form(None),
     category: ParticipantCategory = Form(ParticipantCategory.OTHER),
     photo: Optional[UploadFile] = File(None),
+    photo_url: Optional[str] = Form(None),
+    photo_object_key: Optional[str] = Form(None),
     event_id: Optional[int] = Form(None),
     payment_order_id: Optional[str] = Form(None),
     payment_status: Optional[str] = Form("PENDING"),
@@ -269,24 +273,79 @@ async def register_participant(
     await db.flush()
     await db.refresh(participant)
 
-    photo_path: Optional[str] = None
+    photo_bytes: Optional[bytes] = None
     if photo and photo.filename:
-        photo_dir = settings.photos_dir
-        filename = f"{participant.id}.jpg"
-        filepath = photo_dir / filename
-        with open(filepath, "wb") as f:
-            f.write(await photo.read())
-        participant.photo_url = f"uploads/photos/{filename}"
-        photo_path = str(filepath)
+        photo_bytes = await photo.read()
+        storage_service.validate_upload(
+            "participant_photos",
+            photo.filename,
+            photo.content_type,
+            len(photo_bytes),
+        )
+        p_obj_key = storage_service.generate_object_key(
+            event_id=target_event_id,
+            category="participant_photos",
+            filename=photo.filename,
+            participant_id=participant.id,
+        )
+        p_pub_url, p_provider = storage_service.upload_bytes(
+            event=evt,
+            object_key=p_obj_key,
+            data=photo_bytes,
+            content_type=photo.content_type or "image/jpeg",
+        )
+        participant.photo_url = p_pub_url
+        participant.photo_object_key = p_obj_key
+        db.add(StoredFile(
+            event_id=target_event_id,
+            participant_id=participant.id,
+            category="participant_photos",
+            object_key=p_obj_key,
+            public_url=p_pub_url,
+            original_filename=photo.filename,
+            content_type=photo.content_type,
+            size_bytes=len(photo_bytes),
+            storage_provider=p_provider,
+        ))
+    elif photo_url and photo_object_key:
+        participant.photo_url = photo_url.strip()
+        participant.photo_object_key = photo_object_key.strip()
+        photo_bytes = storage_service.download_bytes(evt, participant.photo_object_key)
+        existing_sf = (await db.execute(
+            select(StoredFile).where(StoredFile.object_key == participant.photo_object_key)
+        )).scalar_one_or_none()
+        if existing_sf:
+            existing_sf.participant_id = participant.id
+        else:
+            db.add(StoredFile(
+                event_id=target_event_id,
+                participant_id=participant.id,
+                category="participant_photos",
+                object_key=participant.photo_object_key,
+                public_url=participant.photo_url,
+                storage_provider="r2" if storage_service.resolve_r2_config(evt) else "local",
+            ))
 
-    qr_rel = generate_qr_code(participant.id, participant.name)
-    participant.qr_code_url = qr_rel
+    qr_url, qr_key, qr_bytes, qr_provider = generate_qr_code_for_event(participant.id, participant.name, evt)
+    participant.qr_code_url = qr_url
+    participant.qr_object_key = qr_key
+    db.add(StoredFile(
+        event_id=target_event_id,
+        participant_id=participant.id,
+        category="qr_codes",
+        object_key=qr_key,
+        public_url=qr_url,
+        original_filename=f"{participant.id}.png",
+        content_type="image/png",
+        size_bytes=len(qr_bytes),
+        storage_provider=qr_provider,
+    ))
 
     await db.flush()
     await db.refresh(participant)
 
-    if photo_path:
-        embedding_vec = generate_embedding(photo_path)
+    if photo_bytes:
+        embedding_vec = generate_embedding_from_bytes(photo_bytes)
         face_emb = FaceEmbedding(
             participant_id=participant.id,
             embedding=embedding_vec,
@@ -298,8 +357,7 @@ async def register_participant(
         participant.embedding_status = "NOT_REQUIRED"
         await db.flush()
 
-    qr_abs_path = str(settings.qrcodes_dir / f"{participant.id}.png")
-    background_tasks.add_task(send_qr_email, participant.email, participant.name, qr_abs_path)
+    background_tasks.add_task(send_qr_email, participant.email, participant.name, "", qr_bytes)
 
     await _audit(
         db,
@@ -425,31 +483,41 @@ async def get_participant(
 @router.post("/upload-file")
 async def upload_participant_file(
     file: UploadFile = File(...),
+    event_id: Optional[int] = Form(None),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Upload a file or document submitted as part of dynamic form registration."""
+    """Upload a file or document submitted as part of dynamic form registration (R2 or local fallback)."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename required")
 
-    ext = Path(file.filename).suffix.lower()
-    allowed_exts = [
-        ".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf",
-        ".doc", ".docx", ".txt", ".csv", ".xlsx", ".zip"
-    ]
-    if ext not in allowed_exts:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File extension '{ext}' is not supported. Allowed: {', '.join(allowed_exts)}",
-        )
-
-    safe_name = f"{uuid.uuid4().hex[:12]}_{Path(file.filename).name}"
-    filepath = settings.documents_dir / safe_name
-
     content = await file.read()
-    with open(filepath, "wb") as f:
-        f.write(content)
+    storage_service.validate_upload("documents", file.filename, file.content_type, len(content))
 
-    url = f"/uploads/documents/{safe_name}"
-    return {"url": url, "filename": file.filename, "size": len(content)}
+    evt = None
+    if event_id is not None:
+        evt = (await db.execute(select(Event).where(Event.id == event_id))).scalar_one_or_none()
+
+    object_key = storage_service.generate_object_key(event_id, "documents", file.filename)
+    public_url, provider = storage_service.upload_bytes(
+        event=evt,
+        object_key=object_key,
+        data=content,
+        content_type=file.content_type or "application/octet-stream",
+    )
+
+    db.add(StoredFile(
+        event_id=event_id,
+        category="documents",
+        object_key=object_key,
+        public_url=public_url,
+        original_filename=file.filename,
+        content_type=file.content_type,
+        size_bytes=len(content),
+        storage_provider=provider,
+    ))
+    await db.flush()
+
+    return {"url": public_url, "object_key": object_key, "filename": file.filename, "size": len(content)}
 
 
 def resolve_media_path(stored_path: str | None) -> Path | None:
@@ -501,6 +569,19 @@ async def get_participant_photo(
     if not participant or not participant.photo_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
 
+    evt = None
+    if participant.event_id:
+        evt = (await db.execute(select(Event).where(Event.id == participant.event_id))).scalar_one_or_none()
+
+    if participant.photo_object_key:
+        data = storage_service.download_bytes(evt, participant.photo_object_key)
+        if data is not None:
+            await _audit(
+                db, request, "PARTICIPANT_PHOTO_READ", _staff,
+                entity_id=str(participant_id), after={"result": "served_storage"},
+            )
+            return Response(content=data, media_type="image/jpeg")
+
     filepath = resolve_media_path(participant.photo_url)
     if not filepath or not filepath.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file missing")
@@ -531,6 +612,15 @@ async def get_participant_qrcode(
     participant = result.scalar_one_or_none()
     if not participant or not participant.qr_code_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="QR code not found")
+
+    evt = None
+    if participant.event_id:
+        evt = (await db.execute(select(Event).where(Event.id == participant.event_id))).scalar_one_or_none()
+
+    if participant.qr_object_key:
+        data = storage_service.download_bytes(evt, participant.qr_object_key)
+        if data is not None:
+            return Response(content=data, media_type="image/png")
 
     filepath = resolve_media_path(participant.qr_code_url)
     if not filepath or not filepath.exists():
@@ -651,7 +741,28 @@ async def delete_participant(
     except Exception as e:
         logger.warning("Error cleaning dependent token/outbox rows: %s", e)
 
-    # Clean up uploaded media files
+    # Clean up uploaded media files (R2 + local)
+    evt = None
+    if participant.event_id:
+        evt = (await db.execute(select(Event).where(Event.id == participant.event_id))).scalar_one_or_none()
+
+    keys_to_delete = set()
+    if participant.photo_object_key:
+        keys_to_delete.add(participant.photo_object_key)
+    if participant.qr_object_key:
+        keys_to_delete.add(participant.qr_object_key)
+
+    stored_rows = (await db.execute(
+        select(StoredFile).where(StoredFile.participant_id == participant_id)
+    )).scalars().all()
+    for row in stored_rows:
+        keys_to_delete.add(row.object_key)
+
+    for obj_key in keys_to_delete:
+        storage_service.delete_object(evt, obj_key)
+
+    await db.execute(delete(StoredFile).where(StoredFile.participant_id == participant_id))
+
     for file_path in [participant.photo_url, participant.qr_code_url]:
         if file_path:
             fp = resolve_media_path(file_path)

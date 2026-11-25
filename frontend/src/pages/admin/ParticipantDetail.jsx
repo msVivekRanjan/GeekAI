@@ -12,7 +12,7 @@ import {
   Eye, ExternalLink, Calendar, Image as ImageIcon, Camera, Hash,
   CheckSquare, AlignLeft, List, Globe, User, Layers
 } from 'lucide-react'
-import { getCategoryColor, getMethodBadge, formatDate } from '../../utils/helpers'
+import { getCategoryColor, getMethodBadge, formatDate, resolveMediaUrl } from '../../utils/helpers'
 
 const CATEGORIES = ['STUDENT', 'RESEARCHER', 'PROFESSIONAL', 'SPEAKER', 'OTHER']
 const PAYMENT_STATUSES = ['SUCCESS', 'PENDING', 'FAILED']
@@ -112,14 +112,10 @@ export default function ParticipantDetail() {
     )
   }
 
-  // Format static media URLs safely
-  const photoUrl = participant.photo_url
-    ? (participant.photo_url.startsWith('/') ? participant.photo_url : `/${participant.photo_url}`)
-    : null
+  // Format static / R2 media URLs safely
+  const photoUrl = resolveMediaUrl(participant.photo_url)
 
-  const qrUrl = participant.qr_code_url
-    ? (participant.qr_code_url.startsWith('/') ? participant.qr_code_url : `/${participant.qr_code_url}`)
-    : null
+  const qrUrl = resolveMediaUrl(participant.qr_code_url)
 
   const attendanceCount = participant.attendances?.length || 0
 
@@ -629,8 +625,8 @@ function DynamicFieldValue({ field, value, participant, onPreviewImage }) {
   // 1. Photo field (Face recognition check-in photo)
   if (field.type === 'photo') {
     const pUrl = typeof value === 'string'
-      ? (value.startsWith('/') ? value : `/${value}`)
-      : (participant.photo_url ? (participant.photo_url.startsWith('/') ? participant.photo_url : `/${participant.photo_url}`) : null)
+      ? resolveMediaUrl(value)
+      : resolveMediaUrl(participant.photo_url)
 
     if (!pUrl) return <span className="text-gray-400 italic text-sm">No photo uploaded</span>
 
@@ -662,7 +658,7 @@ function DynamicFieldValue({ field, value, participant, onPreviewImage }) {
   if (field.type === 'file') {
     const isImage = typeof value === 'string' && /\.(jpg|jpeg|png|webp|gif)$/i.test(value)
     if (isImage) {
-      const imgUrl = value.startsWith('/') ? value : `/${value}`
+      const imgUrl = resolveMediaUrl(value)
       return (
         <div className="flex items-center gap-3 mt-1">
           <img

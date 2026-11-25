@@ -61,8 +61,25 @@ class Settings(BaseSettings):
     def smtp_configured(self) -> bool:
         return bool(self.SMTP_HOST and self.SMTP_USER and self.SMTP_PASSWORD)
 
-    # Uploads
+    # Uploads & Storage
+    STORAGE_BACKEND: str = "local"  # "local" or "r2"
     UPLOAD_DIR: str = "uploads"
+
+    # Global Cloudflare R2 Fallback (per-event settings override these)
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET_NAME: str = ""
+    R2_PUBLIC_URL: str = ""
+
+    @property
+    def r2_configured(self) -> bool:
+        return bool(
+            self.R2_ACCOUNT_ID
+            and self.R2_ACCESS_KEY_ID
+            and self.R2_SECRET_ACCESS_KEY
+            and self.R2_BUCKET_NAME
+        )
 
     # Cashfree Payment Gateway
     CASHFREE_APP_ID: str = ""

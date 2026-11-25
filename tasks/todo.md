@@ -1,60 +1,58 @@
-# GeekAI Platform Tasks: Conditional Fee, Complete Participant Details, & Event Admin Credentials
+# Cloudflare R2 Storage Integration — Implementation Plan
 
-## Implementation Plan
+## 1. Dependencies & Configuration
+- [x] Add `boto3>=1.34.0` to `backend/requirements.txt` and install in `geekai-backend`.
+- [x] Add `STORAGE_BACKEND` (`local` | `r2`) and optional global R2 env vars (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL`) to `backend/app/core/config.py` and `.env.example`.
 
-### Task 1: Conditional Registration Fee on Public Registration Page
-- [x] Inspect and update `frontend/src/pages/EventRegister.jsx`:
-  - When Cashfree payment is disabled (`!isPaymentEnabled`):
-    - Hide fee summary pill in `summary-top` (do not display "Free Registration").
-    - In `checkout-total`, hide the fee box (`role="status"` displaying "Total payable / Registration fee: Free"); only show the "Complete Registration" action button.
-    - If guidelines are displayed, filter out any fee / refund lines when payment is disabled so no fee-related text appears anywhere on the page.
-    - Keep direct submission workflow without payment modal or restrictions.
+## 2. Database Schema & Migration (`007_cloudflare_r2_storage.py`)
+- [x] Add per-event R2 columns to `events` table:
+  - `r2_enabled` (Boolean, default False)
+  - `r2_account_id` (String(255), nullable)
+  - `r2_access_key_id` (String(255), nullable)
+  - `r2_secret_access_key` (String(512), nullable)
+  - `r2_bucket_name` (String(255), nullable)
+  - `r2_public_url` (String(512), nullable)
+- [x] Add `photo_object_key` and `qr_object_key` (String(512), nullable) to `participants` table.
+- [x] Create `stored_files` table (`id`, `event_id`, `participant_id`, `category`, `object_key`, `public_url`, `original_filename`, `content_type`, `size_bytes`, `storage_provider`, `created_at`).
+- [x] Update `backend/app/models/models.py` and `backend/app/schemas/schemas.py` (`EventOut`, `EventCreate`, `EventUpdate`, `SuperAdminEventOut`, `ParticipantOut`, `PresignUploadRequest`, `PresignUploadResponse`).
 
-### Task 2: Event Admin Credentials Management in Super Admin
-- [x] Backend Schemas & Models:
-  - Add `EventAdminOut` and `EventAdminUpsert` models in `backend/app/schemas/schemas.py`.
-  - Add `admin_email` and `admin_name` to `SuperAdminEventOut`.
-- [x] Backend API in `backend/app/api/super_admin.py`:
-  - `GET /api/super-admin/events/{event_id}/admin`: Return current admin user for the event (`id`, `email`, `name`, `is_active`, `role`) or null.
-  - `POST /api/super-admin/events/{event_id}/admin`: Assign, create, or update admin credentials (email, name, password, is_active). Securely hash password with `hash_password()`. Allow password updates without exposing existing passwords (if password omitted on update, keep existing hash). Ensure role is `ADMIN` and `event_id` is assigned.
-  - Update `_to_super_admin_out` to include `admin_email` and `admin_name`.
-- [x] Frontend UI in Super Admin:
-  - In `frontend/src/pages/super-admin/EventEditor.jsx`: Add an "Event Admin Credentials" card with:
-    - Current admin status indicator
-    - Email input
-    - Name input
-    - Password input with show/hide toggle and note "(Leave blank to keep existing password)"
-    - Active toggle
-    - Integrated saving or standalone "Save Admin Credentials" action.
-  - In `frontend/src/pages/super-admin/Events.jsx`: Show assigned event admin email in the event card meta tags.
+## 3. Storage Service & Presigned URL API
+- [x] Create `backend/app/services/storage_service.py`:
+  - Dynamic resolution of event R2 config -> global R2 config -> local filesystem fallback.
+  - S3-compatible `boto3` client for Cloudflare R2 (`https://{account_id}.r2.cloudflarestorage.com`).
+  - Dynamic object key generator using event ID, participant ID, category (`participant_photos`, `form_uploads`, `documents`, `qr_codes`), and unique UUID + sanitized filename.
+  - Presigned PUT URL generation (with content-type & expiry).
+  - Direct server-side upload (`put_bytes`), download (`get_bytes`), and deletion (`delete_object`).
+  - Validation of file extensions, MIME types, and size limits per category.
+- [x] Create `backend/app/api/storage.py` and register in `backend/app/main.py`:
+  - `POST /api/storage/presign-upload` (validates category, auth for `form_uploads`, file type/size; returns presigned PUT URL for R2 or local upload URL for dev).
+  - `POST /api/storage/local-upload` (handles local fallback uploads to `uploads/{object_key}`).
+  - `POST /api/storage/confirm-upload` (records `StoredFile` metadata in PostgreSQL).
+  - `DELETE /api/storage/object` (authenticated deletion of replaced/unwanted files from R2/local and `stored_files`).
 
-### Task 3: Complete Dynamic Participant Details in Event Admin Dashboard
-- [x] Backend fixes in `backend/app/api/participants.py`:
-  - Ensure `GET /api/participants/{id}` includes `custom_responses=participant.custom_responses`, `source`, and `status`.
-  - Add file upload endpoint `POST /api/participants/upload-file` to handle document/image uploads for dynamic form file fields.
-- [x] Frontend Dynamic Participant Details in `frontend/src/pages/admin/ParticipantDetail.jsx`:
-  - Fetch the event's registration schema for `participant.event_id`.
-  - Render a comprehensive **"Registration Form Submission"** section displaying all dynamic form fields:
-    - Render fields based on the event's dynamic registration schema (matching `field.id` with `participant.custom_responses`).
-    - Option labels resolution: For `radio`, `dropdown`, and `checkbox`, map option values to human-readable option labels.
-    - Image & File rendering: If an answer is an image/photo URL (or `photo_url`), render an image preview with modal / zoom / download; if a file URL, render document download/view.
-    - Text / Textarea / Date / Number: Render clearly labeled responses.
-    - Fallback: Any submitted keys in `custom_responses` not matching schema fields are also displayed so no user input is ever missed.
-  - In `frontend/src/pages/admin/Participants.jsx`:
-    - Add a "View Details" action icon in the table rows linking directly to `/admin/participants/${id}`.
+## 4. Integrate R2 into Services & Existing Endpoints
+- [x] `backend/app/services/qr_service.py`: Generate QR PNG in memory, upload via `storage_service` under `events/{event_id}/qr_codes/`, return `(public_url, object_key, qr_bytes)`.
+- [x] `backend/app/services/embedding_service.py`: Add `generate_embedding_from_bytes(image_bytes)` so face embeddings work from R2 without requiring local disk files.
+- [x] `backend/app/services/email_service.py`: Support `qr_bytes` directly in `send_qr_email`.
+- [x] `backend/app/api/participants.py`:
+  - Support both presigned R2 photo/document uploads (`photo_url`, `photo_object_key`) and direct multipart `UploadFile` uploads (uploaded to R2 by backend).
+  - Compute face embedding from bytes.
+  - Update `get_participant_photo` and `get_participant_qrcode` to serve from R2 or legacy local paths.
+  - Update `delete_participant` to delete R2 objects (`photo_object_key`, `qr_object_key`, and any `custom_responses` file keys) and `stored_files` rows.
+- [x] `backend/app/api/super_admin.py`:
+  - Mask `r2_secret_access_key` in `_to_super_admin_out` (`has_r2_secret`), preserve existing secret on blank update.
+  - Update `upload_form_field_image` to upload to R2 under `events/{event_id}/form_uploads/` when R2 is enabled.
+  - Update `delete_event` to clean up all `stored_files` / R2 objects for the event.
 
-### Task 4: Build, Deploy & Comprehensive E2E Verification
-- [x] Build frontend (`npm run build`).
-- [x] Deploy backend and frontend Docker containers.
-- [x] E2E Automated Verification:
-  1. Test conditional fee: Verify public registration page for free event has zero fee text, fee pills, or checkout fee blocks.
-  2. Test Super Admin managing Event Admin credentials:
-     - Assign new admin to an event with email & password.
-     - Verify event admin can log in with new credentials.
-     - Verify event admin token scopes them strictly to their assigned event.
-     - Update password without exposing old password, verify new password works.
-  3. Test complete dynamic participant details:
-     - Register participant with custom fields, radio options, checkboxes, and text.
-     - Log in as Event Admin, fetch participant details, verify all dynamic form responses render accurately.
-  4. Verify backward compatibility with OAIC and other existing events.
+## 5. Frontend Integration
+- [x] Add `resolveMediaUrl(url)` helper in `frontend/src/utils/helpers.js` to handle both `https://...` R2 URLs and legacy `/uploads/...` paths.
+- [x] `frontend/src/pages/super-admin/EventEditor.jsx`: Add "Cloudflare R2 Storage Settings" card (toggle, Account ID, Access Key ID, Secret Access Key with mask/eye toggle, Bucket Name, Public Base URL).
+- [x] `frontend/src/pages/super-admin/FormBuilder.jsx`: Use presigned URL upload flow for Form Builder `Image` field uploads (with deletion of replaced images).
+- [x] `frontend/src/pages/EventRegister.jsx`: Use presigned URL upload flow for participant `photo` and `file` uploads when R2 is enabled (falling back cleanly to local upload in dev).
+- [x] Update `EventSuccess.jsx`, `ParticipantDetail.jsx`, `Participants.jsx`, `QRScanner.jsx`, `ManualLookup.jsx` to use `resolveMediaUrl`.
+
+## 6. Build, Deploy & E2E Verification
+- [x] Install `boto3` in `geekai-backend`, apply migration `007_cloudflare_r2_storage`.
+- [x] Build frontend (`npm run build`) and deploy containers.
+- [x] Test presigned URL generation, R2 key prefixes, local dev fallback, Super Admin R2 config (secret masking), participant registration with photo/QR/documents, deletion cleanup, and OAIC backward compatibility.
 - [x] Update `tasks/progress.md`.

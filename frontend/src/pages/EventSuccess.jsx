@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { ArrowLeft, Calendar, Check, Download, MapPin, ScanLine } from 'lucide-react'
 import { eventDate } from '../utils/eventDisplay'
+import { resolveMediaUrl } from '../utils/helpers'
 
 const escapeCalendar = value => String(value || '').replaceAll('\\', '\\\\').replace(/\r?\n/g, '\\n').replaceAll(';', '\\;').replaceAll(',', '\\,')
 
@@ -72,13 +73,13 @@ export default function EventSuccess() {
           <div className="pass-media">
             <div>
               {attendee.qr && !qrUnavailable ?
-                <img className="pass-qr" src={`/${attendee.qr.replace(/^\/+/, '')}`} alt="QR code for session entry" onError={() => setQrUnavailable(true)} />
+                <img className="pass-qr" src={resolveMediaUrl(attendee.qr)} alt="QR code for session entry" onError={() => setQrUnavailable(true)} />
                 : <p className="pass-qr-fallback">Use the QR code in your registration email.</p>}
               <span>Session entry</span>
             </div>
             {attendee.photo && !photoUnavailable && (
               <div>
-                <img className="pass-photo" src={`/${attendee.photo.replace(/^\/+/, '')}`} alt="Attendee check-in photo" onError={() => setPhotoUnavailable(true)} />
+                <img className="pass-photo" src={resolveMediaUrl(attendee.photo)} alt="Attendee check-in photo" onError={() => setPhotoUnavailable(true)} />
                 <span><ScanLine size={15} /> AI Face Check-In Ready</span>
               </div>
             )}

@@ -12,7 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.deps import get_current_super_admin, get_db
 from app.core.security import hash_password
-from app.models.models import Attendance, Event, FaceEmbedding, Participant, Session, User, UserRole
+from app.models.models import Attendance, Event, FaceEmbedding, Participant, Session, StoredFile, User, UserRole
+from app.services import storage_service
 from app.schemas.schemas import (
     EventAdminOut,
     EventAdminUpsert,
@@ -35,6 +36,7 @@ def _to_super_admin_out(
     return out.model_copy(update={
         "participant_count": participant_count,
         "has_cashfree_secret": bool(event.cashfree_secret_key),
+        "has_r2_secret": bool(event.r2_secret_access_key),
         "admin_id": admin.id if admin else None,
         "admin_email": admin.email if admin else None,
         "admin_name": admin.name if admin else None,
@@ -274,6 +276,12 @@ async def create_event(
         cashfree_app_id=body.cashfree_app_id,
         cashfree_secret_key=body.cashfree_secret_key,
         cashfree_env=body.cashfree_env,
+        r2_enabled=body.r2_enabled,
+        r2_account_id=body.r2_account_id,
+        r2_access_key_id=body.r2_access_key_id,
+        r2_secret_access_key=body.r2_secret_access_key,
+        r2_bucket_name=body.r2_bucket_name,
+        r2_public_url=body.r2_public_url,
         guidelines=body.guidelines,
         event_date=body.event_date,
         venue=body.venue,
@@ -302,9 +310,11 @@ async def update_event(
         raise HTTPException(status_code=404, detail="Event not found")
 
     update_data = body.model_dump(exclude_unset=True)
-    # Only update secret key if non-empty string is passed
+    # Only update secret keys if non-empty string is passed
     if "cashfree_secret_key" in update_data and not update_data["cashfree_secret_key"]:
         del update_data["cashfree_secret_key"]
+    if "r2_secret_access_key" in update_data and not update_data["r2_secret_access_key"]:
+        del update_data["r2_secret_access_key"]
 
     for field, value in update_data.items():
         setattr(event, field, value)
@@ -329,6 +339,12 @@ async def delete_event(
     event = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+
+    # Delete stored R2/local objects for this event
+    stored_objs = (await db.execute(select(StoredFile).where(StoredFile.event_id == event_id))).scalars().all()
+    for obj in stored_objs:
+        storage_service.delete_object(event, obj.object_key)
+    await db.execute(delete(StoredFile).where(StoredFile.event_id == event_id))
 
     # Delete child records with RESTRICT foreign keys
     await db.execute(delete(Attendance).where(Attendance.event_id == event_id))
@@ -384,27 +400,39 @@ async def upload_form_image(
 async def upload_form_field_image(
     event_id: Optional[int] = None,
     image: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_super_admin),
 ):
-    """Upload an image to be embedded in a dynamic form or event page."""
-    if not image.content_type or not image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    ext = Path(image.filename or "image.jpg").suffix.lower()
-    if ext not in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"]:
-        ext = ".jpg"
-
-    events_dir = settings.events_dir
-    prefix = f"{event_id}_" if event_id else ""
-    filename = f"{prefix}form_img_{uuid.uuid4().hex[:10]}{ext}"
-    filepath = events_dir / filename
-
+    """Upload an image to be embedded in a dynamic form or event page (R2 or local fallback)."""
     content = await image.read()
-    with open(filepath, "wb") as f:
-        f.write(content)
+    storage_service.validate_upload("form_uploads", image.filename or "image.jpg", image.content_type, len(content))
 
-    url = f"/uploads/events/{filename}"
-    return {"url": url, "filename": filename}
+    event = None
+    if event_id is not None:
+        event = (await db.execute(select(Event).where(Event.id == event_id))).scalar_one_or_none()
+
+    object_key = storage_service.generate_object_key(event_id, "form_uploads", image.filename or "image.jpg")
+    public_url, provider = storage_service.upload_bytes(
+        event=event,
+        object_key=object_key,
+        data=content,
+        content_type=image.content_type or "image/jpeg",
+    )
+
+    record = StoredFile(
+        event_id=event_id,
+        category="form_uploads",
+        object_key=object_key,
+        public_url=public_url,
+        original_filename=image.filename,
+        content_type=image.content_type,
+        size_bytes=len(content),
+        storage_provider=provider,
+    )
+    db.add(record)
+    await db.flush()
+
+    return {"url": public_url, "object_key": object_key, "filename": Path(object_key).name}
 
 
 @router.delete("/events/{event_id}/form-image")

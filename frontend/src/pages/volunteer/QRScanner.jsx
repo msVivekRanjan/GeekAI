@@ -7,7 +7,7 @@ import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import { QrCode, Camera, CheckCircle, XCircle, AlertTriangle, ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { getCategoryColor } from '../../utils/helpers'
+import { getCategoryColor, resolveMediaUrl } from '../../utils/helpers'
 import toast from 'react-hot-toast'
 
 export default function QRScanner() {
@@ -234,7 +234,7 @@ export default function QRScanner() {
                 <div className="mt-3 flex items-center gap-3">
                   {result.participant.photo_url && (
                     <img
-                      src={`/${result.participant.photo_url}`}
+                      src={resolveMediaUrl(result.participant.photo_url)}
                       alt={result.participant.name}
                       className="w-12 h-12 rounded-full object-cover border-2 border-white shadow"
                     />

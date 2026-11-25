@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Save, CreditCard, Shield, Eye, EyeOff, Trash2, Plus, List, UserCheck } from 'lucide-react'
+import { ArrowLeft, Save, CreditCard, Shield, Eye, EyeOff, Trash2, Plus, List, UserCheck, HardDrive } from 'lucide-react'
 import client from '../../api/client'
 import toast from 'react-hot-toast'
 
@@ -20,6 +20,12 @@ const EMPTY_FORM = {
   cashfree_app_id: '',
   cashfree_secret_key: '',
   cashfree_env: 'sandbox',
+  r2_enabled: false,
+  r2_account_id: '',
+  r2_access_key_id: '',
+  r2_secret_access_key: '',
+  r2_bucket_name: '',
+  r2_public_url: '',
   guidelines: [],
   venue: '', website: '',
   event_date: '', registration_deadline: '',
@@ -46,6 +52,8 @@ export default function EventEditor() {
   const [slugDirty, setSlugDirty] = useState(false)
   const [showSecret, setShowSecret] = useState(false)
   const [hasSecret, setHasSecret] = useState(false)
+  const [showR2Secret, setShowR2Secret] = useState(false)
+  const [hasR2Secret, setHasR2Secret] = useState(false)
 
   // Event Admin Credentials State
   const [adminForm, setAdminForm] = useState({
@@ -76,6 +84,12 @@ export default function EventEditor() {
           cashfree_app_id: e.cashfree_app_id || '',
           cashfree_secret_key: '',
           cashfree_env: e.cashfree_env || 'sandbox',
+          r2_enabled: e.r2_enabled ?? false,
+          r2_account_id: e.r2_account_id || '',
+          r2_access_key_id: e.r2_access_key_id || '',
+          r2_secret_access_key: '',
+          r2_bucket_name: e.r2_bucket_name || '',
+          r2_public_url: e.r2_public_url || '',
           guidelines: Array.isArray(e.guidelines) ? e.guidelines : [],
           venue: e.venue || '',
           website: e.website || '',
@@ -83,6 +97,7 @@ export default function EventEditor() {
           registration_deadline: toLocalDatetime(e.registration_deadline),
         })
         setHasSecret(!!e.has_cashfree_secret)
+        setHasR2Secret(!!e.has_r2_secret)
         setSlugDirty(true)
       })
       .catch(() => toast.error('Failed to load event'))
@@ -197,9 +212,12 @@ export default function EventEditor() {
         event_date: toISO(form.event_date),
         registration_deadline: toISO(form.registration_deadline),
       }
-      // Only send secret key if non-empty, otherwise omit to keep existing secret
+      // Only send secret keys if non-empty, otherwise omit to keep existing secrets
       if (!payload.cashfree_secret_key) {
         delete payload.cashfree_secret_key
+      }
+      if (!payload.r2_secret_access_key) {
+        delete payload.r2_secret_access_key
       }
 
       // Remove empty strings → null for optional text fields
@@ -213,6 +231,10 @@ export default function EventEditor() {
         if (form.cashfree_secret_key) {
           setHasSecret(true)
           setForm(f => ({ ...f, cashfree_secret_key: '' }))
+        }
+        if (form.r2_secret_access_key) {
+          setHasR2Secret(true)
+          setForm(f => ({ ...f, r2_secret_access_key: '' }))
         }
       } else {
         const r = await client.post('/super-admin/events', payload)
@@ -528,6 +550,131 @@ export default function EventEditor() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Cloudflare R2 Storage Settings Card */}
+        <div className="sa-panel sa-settings-panel p-6 space-y-5">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div className="flex items-center gap-2">
+              <HardDrive className="h-5 w-5 text-gray-700" />
+              <h3 className="font-semibold text-gray-900">Storage Settings (Cloudflare R2)</h3>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                name="r2_enabled"
+                checked={form.r2_enabled}
+                onChange={handleChange}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+              <span className="ml-3 text-sm font-medium text-gray-700">
+                {form.r2_enabled ? 'R2 Enabled' : 'Local Storage'}
+              </span>
+            </label>
+          </div>
+
+          <p className="text-xs text-gray-500">
+            {form.r2_enabled
+              ? 'Cloudflare R2 presigned URL uploads are enabled. Photos, form images, documents, and QR codes will be stored in your R2 bucket under events/{event_id}/.'
+              : 'Using default local filesystem storage (development mode). Enable Cloudflare R2 to store media in object storage.'}
+          </p>
+
+          {form.r2_enabled && (
+            <div className="space-y-4 pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    R2 Account ID *
+                  </label>
+                  <input
+                    name="r2_account_id"
+                    value={form.r2_account_id}
+                    onChange={handleChange}
+                    required={form.r2_enabled}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
+                    placeholder="e.g. 9f8a7b6c5d4e3f2a1b0c"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    R2 Bucket Name *
+                  </label>
+                  <input
+                    name="r2_bucket_name"
+                    value={form.r2_bucket_name}
+                    onChange={handleChange}
+                    required={form.r2_enabled}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
+                    placeholder="e.g. geekai-media"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    R2 Access Key ID *
+                  </label>
+                  <input
+                    name="r2_access_key_id"
+                    value={form.r2_access_key_id}
+                    onChange={handleChange}
+                    required={form.r2_enabled}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
+                    placeholder="Enter R2 Access Key ID"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-gray-700">
+                      R2 Secret Access Key
+                    </label>
+                    {hasR2Secret && (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        <Shield className="h-3 w-3" /> Configured &amp; Secured
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      name="r2_secret_access_key"
+                      type={showR2Secret ? 'text' : 'password'}
+                      value={form.r2_secret_access_key}
+                      onChange={handleChange}
+                      className="w-full border border-gray-300 rounded-lg pl-3 pr-10 py-2 text-sm font-mono focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
+                      placeholder={hasR2Secret ? '•••••••• (Leave blank to keep existing)' : 'Enter R2 Secret Access Key'}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowR2Secret(s => !s)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                    >
+                      {showR2Secret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  R2 Public Base URL (Optional)
+                </label>
+                <input
+                  name="r2_public_url"
+                  type="url"
+                  value={form.r2_public_url}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
+                  placeholder="https://pub-xxxx.r2.dev or https://cdn.geekai.in"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  If provided, files are served directly from this R2 public URL. Otherwise they are served securely via the backend proxy. Secret keys are never exposed to the frontend.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Registration Guidelines Card */}

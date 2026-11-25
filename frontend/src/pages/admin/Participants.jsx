@@ -8,7 +8,7 @@ import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import { Search, ChevronLeft, ChevronRight, Pencil, Trash2, X, Save, Eye } from 'lucide-react'
-import { getCategoryColor, formatShortDate } from '../../utils/helpers'
+import { getCategoryColor, formatShortDate, resolveMediaUrl } from '../../utils/helpers'
 
 const CATEGORIES = ['STUDENT', 'RESEARCHER', 'PROFESSIONAL', 'SPEAKER', 'OTHER']
 const PAYMENT_STATUSES = ['SUCCESS', 'PENDING', 'FAILED']
@@ -100,9 +100,7 @@ export default function Participants() {
       key: 'photo',
       label: 'Photo',
       render: (_, row) => {
-        const photoSrc = row.photo_url
-          ? (row.photo_url.startsWith('/') ? row.photo_url : `/${row.photo_url}`)
-          : null
+        const photoSrc = resolveMediaUrl(row.photo_url)
         return (
           <div className="flex items-center justify-center w-9 h-9">
             {photoSrc ? (

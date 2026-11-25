@@ -7,7 +7,7 @@ import Input from '../../components/ui/Input'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import { Search, ArrowLeft, CheckCircle, AlertTriangle } from 'lucide-react'
-import { getCategoryColor } from '../../utils/helpers'
+import { getCategoryColor, resolveMediaUrl } from '../../utils/helpers'
 import toast from 'react-hot-toast'
 
 export default function ManualLookup() {
@@ -114,7 +114,7 @@ export default function ManualLookup() {
                 <div className="flex items-center gap-3 min-w-0">
                   {p.photo_url ? (
                     <img
-                      src={`/${p.photo_url}`}
+                      src={resolveMediaUrl(p.photo_url)}
                       alt={p.name}
                       className="w-10 h-10 rounded-full object-cover border flex-shrink-0"
                     />

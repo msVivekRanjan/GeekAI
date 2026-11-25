@@ -139,3 +139,40 @@
     2. Admin assignment, login verification, strict 403 blocking on Super Admin APIs, and password update without exposing existing passwords.
     3. File upload, participant registration with rich custom responses, and dynamic detail retrieval by the event admin.
     4. Verified OAIC backward compatibility with 7 participants, 19 custom response keys, and 22 schema fields.
+
+
+### 8. Cloudflare R2 Integration with Presigned URL Uploads & Local Dev Fallback (Complete ✅)
+- **1. Dependencies & Configuration**:
+  - Added `boto3>=1.34.0` to `backend/requirements.txt` and installed in `geekai-backend`.
+  - Added `STORAGE_BACKEND` (`local` | `r2`) and optional global R2 fallback env vars (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL`) to `backend/app/core/config.py` and `.env.example`.
+- **2. Database Schema & Migration (`007_cloudflare_r2_storage.py`)**:
+  - Added per-event R2 settings to `events` (`r2_enabled`, `r2_account_id`, `r2_access_key_id`, `r2_secret_access_key`, `r2_bucket_name`, `r2_public_url`).
+  - Added `photo_object_key` and `qr_object_key` to `participants`.
+  - Created `stored_files` table (`id`, `event_id`, `participant_id`, `category`, `object_key`, `public_url`, `original_filename`, `content_type`, `size_bytes`, `storage_provider`, `created_at`) in PostgreSQL.
+  - Updated `Event`, `Participant`, `StoredFile` in `backend/app/models/models.py` and schemas in `backend/app/schemas/schemas.py` (masking `r2_secret_access_key` via `has_r2_secret`, never exposing secrets to public or Super Admin browsers).
+- **3. Storage Service & Presigned URL API**:
+  - Created `backend/app/services/storage_service.py`:
+    - Resolves per-event R2 config -> global R2 config -> local filesystem fallback.
+    - Generates dynamic event-scoped object keys (`events/{event_id}/participant_photos/`, `events/{event_id}/form_uploads/`, `events/{event_id}/documents/`, `events/{event_id}/qr_codes/`) with unique IDs and sanitized filenames (no manual folder creation required).
+    - Validates extensions, MIME types, and file size limits per category.
+    - Generates S3v4 presigned `PUT` URLs for Cloudflare R2, plus direct byte upload/download/deletion helpers.
+  - Created `backend/app/api/storage.py` (registered in `backend/app/main.py`):
+    - `POST /api/storage/presign-upload` (enforces admin/super-admin auth for `form_uploads` and `qr_codes`).
+    - `POST /api/storage/local-upload` (local dev fallback matching the presigned upload flow).
+    - `POST /api/storage/confirm-upload` (records `StoredFile` metadata in PostgreSQL).
+    - `GET /api/storage/object` (proxy-serves R2/local objects when no public R2 domain is set).
+    - `DELETE /api/storage/object` (authenticated cleanup of replaced/unwanted objects).
+- **4. Pipeline Integration (Photos, Face Embeddings, QR Codes, Form Uploads, Deletion)**:
+  - `backend/app/services/embedding_service.py`: Added `generate_embedding_from_bytes()` for in-memory/R2 face embedding generation.
+  - `backend/app/services/qr_service.py`: Added `generate_qr_code_for_event()` generating PNG bytes in memory and storing under `events/{event_id}/qr_codes/`.
+  - `backend/app/services/email_service.py`: Updated `send_qr_email()` to attach `qr_bytes` directly without requiring local files.
+  - `backend/app/api/participants.py`: Supports both presigned R2 uploads (`photo_url`, `photo_object_key`) and direct multipart uploads; serves photos/QRs from R2 or legacy local paths; deletes R2/local objects and `stored_files` rows on participant deletion.
+  - `backend/app/api/super_admin.py`: Preserves `r2_secret_access_key` when omitted; uploads form images to `events/{event_id}/form_uploads/`; deletes all event `stored_files` objects on event deletion.
+- **5. Frontend Integration**:
+  - Created `frontend/src/utils/upload.js` (`uploadViaPresignedUrl`, `deleteStoredObject`) and `resolveMediaUrl()` in `frontend/src/utils/helpers.js`.
+  - Added **"Storage Settings (Cloudflare R2)"** card in `frontend/src/pages/super-admin/EventEditor.jsx`.
+  - Updated `FormBuilder.jsx` and `EventRegister.jsx` to upload via presigned URLs (`form_uploads`, `documents`, `participant_photos`) and clean up replaced form images.
+  - Updated `EventSuccess.jsx`, `ParticipantDetail.jsx`, `Participants.jsx`, `QRScanner.jsx`, and `ManualLookup.jsx` to use `resolveMediaUrl()` for seamless R2 and legacy local URL rendering.
+- **Verification**:
+  - Frontend built (`npm run build`, 2,552 modules, 0 errors) and containers deployed (`geekai-backend`, `geekai-frontend`).
+  - Automated E2E verification passed all 7 checks: R2 secret masking, S3v4 presigned URLs & prefixes across all categories, upload validation & auth checks, local fallback mode, participant photo/QR/embedding/document registration, deletion cleanup, and OAIC backward compatibility.

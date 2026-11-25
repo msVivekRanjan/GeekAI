@@ -5,6 +5,7 @@ import { eventDate, eventFee } from '../utils/eventDisplay'
 import EventPhoto from '../components/public/EventPhoto'
 import { oaicOrganizerLogos } from '../content/oaicLogos'
 import client from '../api/client'
+import { uploadViaPresignedUrl } from '../utils/upload'
 import toast from 'react-hot-toast'
 
 const CATEGORIES = [
@@ -126,17 +127,18 @@ function EventRegistration({ eventSlug }) {
 
   const handleFileUpload = async (fieldId, file) => {
     if (!file) return
-    const fd = new FormData()
-    fd.append('file', file)
     const toastId = toast.loading('Uploading file…')
     try {
-      const res = await client.post('/participants/upload-file', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const res = await uploadViaPresignedUrl({
+        file,
+        eventId: event?.id,
+        eventSlug,
+        category: 'documents',
       })
-      setCustomResponses(prev => ({ ...prev, [fieldId]: res.data.url }))
+      setCustomResponses(prev => ({ ...prev, [fieldId]: res.url }))
       toast.success('File uploaded successfully!', { id: toastId })
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to upload file', { id: toastId })
+      toast.error(err.response?.data?.detail || err.message || 'Failed to upload file', { id: toastId })
     }
   }
 
@@ -231,7 +233,20 @@ function EventRegistration({ eventSlug }) {
     if (data.phone) fd.append('phone', data.phone)
     if (data.institution) fd.append('institution', data.institution)
     fd.append('category', data.category)
-    if (data.photo) fd.append('photo', data.photo)
+    if (data.photo) {
+      if (event?.r2_enabled) {
+        const uploaded = await uploadViaPresignedUrl({
+          file: data.photo,
+          eventId: event?.id,
+          eventSlug,
+          category: 'participant_photos',
+        })
+        fd.append('photo_url', uploaded.url)
+        fd.append('photo_object_key', uploaded.object_key)
+      } else {
+        fd.append('photo', data.photo)
+      }
+    }
     fd.append('source', 'ONLINE')
     if (event?.id) fd.append('event_id', String(event.id))
 

@@ -6,6 +6,7 @@ import {
   AlignLeft, Upload, AlertCircle, Camera, ArrowUp, ArrowDown, GripVertical, Image,
 } from 'lucide-react'
 import client from '../../api/client'
+import { uploadViaPresignedUrl, deleteStoredObject } from '../../utils/upload'
 import toast from 'react-hot-toast'
 
 const FIELD_TYPES = [
@@ -83,18 +84,20 @@ function FieldEditor({ field, onChange, onDelete, onMoveUp, onMoveDown, isFirst,
   const handleFieldImageUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const formData = new FormData()
-    formData.append('image', file)
     setUploadingImage(true)
     try {
-      const url = eventId ? `/super-admin/events/${eventId}/upload-image` : '/super-admin/upload-image'
-      const res = await client.post(url, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      if (field.object_key) {
+        await deleteStoredObject({ eventId, objectKey: field.object_key })
+      }
+      const res = await uploadViaPresignedUrl({
+        file,
+        eventId,
+        category: 'form_uploads',
       })
-      onImageUpload(field.id, res.data.url)
+      onChange({ ...field, image_url: res.url, object_key: res.object_key })
       toast.success('Image uploaded successfully!')
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to upload image')
+      toast.error(err.response?.data?.detail || err.message || 'Failed to upload image')
     } finally {
       setUploadingImage(false)
     }
@@ -203,7 +206,12 @@ function FieldEditor({ field, onChange, onDelete, onMoveUp, onMoveDown, isFirst,
                       />
                       <button
                         type="button"
-                        onClick={() => updateField('image_url', '')}
+                        onClick={async () => {
+                          if (field.object_key) {
+                            await deleteStoredObject({ eventId, objectKey: field.object_key })
+                          }
+                          onChange({ ...field, image_url: '', object_key: null })
+                        }}
                         className="mt-2 text-xs text-red-600 hover:text-red-700 font-medium inline-flex items-center gap-1 cursor-pointer"
                       >
                         <Trash2 className="h-3 w-3" /> Remove image

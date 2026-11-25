@@ -121,6 +121,8 @@ class ParticipantOut(BaseModel):
     category: ParticipantCategory
     photo_url: Optional[str] = None
     qr_code_url: Optional[str] = None
+    photo_object_key: Optional[str] = None
+    qr_object_key: Optional[str] = None
     registered_at: datetime
     event_id: Optional[int] = None
     source: Optional[str] = "ONLINE"
@@ -275,6 +277,7 @@ class EventOut(BaseModel):
     is_published: bool = False
     cashfree_enabled: bool = False
     cashfree_env: str = "sandbox"
+    r2_enabled: bool = False
     guidelines: Optional[List[str]] = None
     event_date: Optional[datetime] = None
     venue: Optional[str] = None
@@ -316,6 +319,7 @@ class FormField(BaseModel):
     help_text: Optional[str] = None
     mapping: Optional[str] = None  # name|email|phone|institution|category|photo|custom
     image_url: Optional[str] = None  # for image field type
+    object_key: Optional[str] = None  # R2 / storage object key for image deletion/management
 
 
 class FormSchema(BaseModel):
@@ -337,6 +341,12 @@ class EventCreate(BaseModel):
     cashfree_app_id: Optional[str] = None
     cashfree_secret_key: Optional[str] = None
     cashfree_env: str = "sandbox"
+    r2_enabled: bool = False
+    r2_account_id: Optional[str] = None
+    r2_access_key_id: Optional[str] = None
+    r2_secret_access_key: Optional[str] = None
+    r2_bucket_name: Optional[str] = None
+    r2_public_url: Optional[str] = None
     guidelines: Optional[List[str]] = None
     event_date: Optional[datetime] = None
     venue: Optional[str] = None
@@ -356,6 +366,12 @@ class EventUpdate(BaseModel):
     cashfree_app_id: Optional[str] = None
     cashfree_secret_key: Optional[str] = None
     cashfree_env: Optional[str] = None
+    r2_enabled: Optional[bool] = None
+    r2_account_id: Optional[str] = None
+    r2_access_key_id: Optional[str] = None
+    r2_secret_access_key: Optional[str] = None
+    r2_bucket_name: Optional[str] = None
+    r2_public_url: Optional[str] = None
     guidelines: Optional[List[str]] = None
     is_active: Optional[bool] = None
     event_date: Optional[datetime] = None
@@ -370,6 +386,12 @@ class SuperAdminEventOut(EventOut):
     participant_count: int = 0
     cashfree_app_id: Optional[str] = None
     has_cashfree_secret: bool = False
+    r2_enabled: bool = False
+    r2_account_id: Optional[str] = None
+    r2_access_key_id: Optional[str] = None
+    r2_bucket_name: Optional[str] = None
+    r2_public_url: Optional[str] = None
+    has_r2_secret: bool = False
     admin_id: Optional[int] = None
     admin_email: Optional[str] = None
     admin_name: Optional[str] = None

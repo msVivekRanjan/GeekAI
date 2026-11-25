@@ -91,6 +91,8 @@ class Participant(Base):
     )
     photo_url = Column(String(512), nullable=True)
     qr_code_url = Column(String(512), nullable=True)
+    photo_object_key = Column(String(512), nullable=True)
+    qr_object_key = Column(String(512), nullable=True)
     registered_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -188,6 +190,12 @@ class Event(Base):
     cashfree_app_id = Column(String(255), nullable=True)
     cashfree_secret_key = Column(String(512), nullable=True)
     cashfree_env = Column(String(20), default="sandbox", nullable=False)
+    r2_enabled = Column(Boolean, default=False, nullable=False)
+    r2_account_id = Column(String(255), nullable=True)
+    r2_access_key_id = Column(String(255), nullable=True)
+    r2_secret_access_key = Column(String(512), nullable=True)
+    r2_bucket_name = Column(String(255), nullable=True)
+    r2_public_url = Column(String(512), nullable=True)
     guidelines = Column(JSONB, nullable=True)
     event_date = Column(DateTime(timezone=True), nullable=True)
     venue = Column(String(255), nullable=True)
@@ -219,3 +227,19 @@ class Coupon(Base):
 
     # Relationships
     event = relationship("Event", back_populates="coupons")
+
+
+class StoredFile(Base):
+    __tablename__ = "stored_files"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=True, index=True)
+    participant_id = Column(Integer, ForeignKey("participants.id", ondelete="CASCADE"), nullable=True, index=True)
+    category = Column(String(50), nullable=False)  # participant_photos | form_uploads | documents | qr_codes
+    object_key = Column(String(512), unique=True, nullable=False, index=True)
+    public_url = Column(String(1024), nullable=False)
+    original_filename = Column(String(255), nullable=True)
+    content_type = Column(String(128), nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+    storage_provider = Column(String(20), nullable=False, default="local")  # r2 | local
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)

@@ -51,3 +51,16 @@ export function truncate(str, len = 30) {
   if (!str) return ''
   return str.length > len ? str.slice(0, len) + '…' : str
 }
+
+export function resolveMediaUrl(url) {
+  if (!url) return null
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('/')
+  ) {
+    return url
+  }
+  return `/${url}`
+}

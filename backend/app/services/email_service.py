@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 async def send_qr_email(
     to_email: str,
     participant_name: str,
-    qr_code_path: str,
+    qr_code_path: str = "",
+    qr_bytes: bytes | None = None,
 ) -> None:
     """Send a registration-confirmation email with the QR code attached inline.
 
@@ -28,9 +29,14 @@ async def send_qr_email(
         logger.warning("SMTP not configured — skipping email to %s", to_email)
         return
 
-    qr_file = Path(qr_code_path)
-    if not qr_file.exists():
-        logger.error("QR code file not found: %s", qr_code_path)
+    raw_bytes = qr_bytes
+    if raw_bytes is None and qr_code_path:
+        qr_file = Path(qr_code_path)
+        if qr_file.exists():
+            raw_bytes = qr_file.read_bytes()
+
+    if not raw_bytes:
+        logger.error("QR code bytes/file not found for %s (%s)", to_email, qr_code_path)
         return
 
     msg = MIMEMultipart("related")
@@ -52,8 +58,7 @@ async def send_qr_email(
     """
     msg.attach(MIMEText(html_body, "html"))
 
-    with open(qr_file, "rb") as f:
-        img = MIMEImage(f.read(), _subtype="png")
+    img = MIMEImage(raw_bytes, _subtype="png")
     img.add_header("Content-ID", "<qrcode>")
     img.add_header("Content-Disposition", "inline", filename="qrcode.png")
     msg.attach(img)

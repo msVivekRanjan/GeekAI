@@ -70,3 +70,33 @@ def generate_embedding(image_path: str) -> List[float]:
     except Exception:
         logger.exception("Error generating embedding for %s", image_path)
         return zero
+
+
+def generate_embedding_from_bytes(image_bytes: bytes) -> List[float]:
+    """Generate a 512-d face embedding directly from raw image bytes (for R2 / in-memory uploads)."""
+    model = _load_model()
+    zero = [0.0] * 512
+
+    if model is None or not image_bytes:
+        return zero
+
+    try:
+        import cv2
+
+        arr = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if img is None:
+            logger.warning("Could not decode image bytes for face embedding")
+            return zero
+
+        faces = model.get(img)
+        if not faces:
+            logger.warning("No face detected in uploaded image bytes")
+            return zero
+
+        face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+        embedding: np.ndarray = face.embedding
+        return embedding.tolist()
+    except Exception:
+        logger.exception("Error generating embedding from bytes")
+        return zero
