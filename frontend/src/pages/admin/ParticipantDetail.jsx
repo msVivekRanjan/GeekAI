@@ -398,7 +398,7 @@ export default function ParticipantDetail() {
             ) : (
               <div className="text-center py-10 text-gray-400 text-sm">
                 <p>No check-in attendance recorded for this participant yet.</p>
-                <p className="text-xs text-gray-400 mt-1">Check-ins via QR scanner, Face recognition, or Manual lookup will appear here.</p>
+                <p className="text-xs text-gray-400 mt-1">Check-ins via QR scanner or Manual lookup will appear here.</p>
               </div>
             )}
           </Card>
@@ -622,7 +622,7 @@ function DynamicFieldValue({ field, value, participant, onPreviewImage }) {
     return <span className="text-gray-400 italic text-sm">Not provided</span>
   }
 
-  // 1. Photo field (Face recognition check-in photo)
+  // 1. Photo field (Participant profile photo)
   if (field.type === 'photo') {
     const pUrl = typeof value === 'string'
       ? resolveMediaUrl(value)
@@ -640,7 +640,7 @@ function DynamicFieldValue({ field, value, participant, onPreviewImage }) {
         />
         <div>
           <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded font-semibold inline-flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" /> Face Check-in Photo
+            <CheckCircle2 className="h-3 w-3" /> Participant Photo
           </span>
           <button
             type="button"

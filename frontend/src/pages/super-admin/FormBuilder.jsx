@@ -245,7 +245,7 @@ function FieldEditor({ field, onChange, onDelete, onMoveUp, onMoveDown, isFirst,
                     <option value="phone">Participant Phone (Cashfree & SMS)</option>
                     <option value="institution">Institution / Organization</option>
                     <option value="category">Participant Category</option>
-                    <option value="photo">Check-in Photo (Face Recognition)</option>
+                    <option value="photo">Participant Photo</option>
                   </select>
                 </div>
 
@@ -655,7 +655,7 @@ export default function FormBuilder() {
           ['email', 'Email Address', 'email', true, 'Email Address'],
           ['phone', 'Phone Number', 'phone', false, 'Phone Number'],
           ['text', 'Institution / Organization', 'institution', false, 'Institution'],
-          ['photo', 'Check-in Photo', 'photo', true, 'Photo (Face Check-in)'],
+          ['photo', 'Participant Photo', 'photo', true, 'Photo (Participant Profile)'],
         ].map(([type, label, mapping, required, caption]) => (
           <button key={mapping} type="button" className="sa-button"
             onClick={() => addCustomField(type, label, mapping, required)}>

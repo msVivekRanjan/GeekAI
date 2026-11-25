@@ -1,35 +1,32 @@
-# Cloud Deployment + Offline Volunteer App + Sync — Implementation Plan
+# Remove Face Recognition & Pgvector (QR-Only Attendance) — Plan
 
-## Phase 1: Cloud Deployment — Gate Volunteer Routes
-- [x] Gate volunteer routes in `frontend/src/App.jsx` with `VITE_DEPLOYMENT_MODE=cloud` env var (using React `lazy` + `Suspense`)
-- [x] Conditionally exclude: `/volunteer/*` (dashboard, face-checkin, scan, manual), `/volunteer/login`
-- [x] Update `vercel.json` with `VITE_DEPLOYMENT_MODE=cloud` buildCommand for frontend service
-- [x] Verify frontend builds cleanly in both cloud and local modes
+## 1. Remove Standalone Face Check-in App
+- [x] Delete `face-checkin/` directory
+- [x] Clean `.gitignore`, `.vercelignore`, `.env.example`, `.env`
 
-## Phase 2: Offline Volunteer App Extensions
-- [x] Add `pyzbar>=0.1.9` to `face-checkin/requirements.txt`
-- [x] Add `EVENT_ID` and `SQLITE_DB` config vars to `face-checkin/config.py`
-- [x] Create `face-checkin/local_db.py` — SQLite schema (participants, sessions, attendance_queue, volunteer_cache)
-- [x] Create `face-checkin/qr_scanner.py` — QR decode, local SQLite lookup, local attendance record
-- [x] Offline attendance recording (`record_attendance_local` implemented in `face-checkin/local_db.py`)
-- [x] Extend `face-checkin/sync.py` — download participants + sessions from `/api/offline/*`, cache to SQLite with offline fallback
-- [x] Extend `face-checkin/ui.py` — add session indicator, online/offline indicator, pending sync count, QR mode UI
-- [x] Create `face-checkin/offline_sync.py` — background thread reading PENDING records, syncing to backend
+## 2. Frontend Cleanup
+- [x] Delete `frontend/src/pages/volunteer/FaceCheckIn.jsx`
+- [x] Remove `FaceCheckIn` import and `/volunteer/face-checkin` route from `frontend/src/App.jsx`
+- [x] Remove Face Check-In card/link from `frontend/src/pages/volunteer/VolunteerDashboard.jsx`
+- [x] Remove `FACE` method badge/copy references in `frontend/src/utils/helpers.js`, `FeatureCarousel.jsx`, `EventSuccess.jsx`, `Home.jsx`, `ParticipantDetail.jsx`, `FormBuilder.jsx`
 
-## Phase 3: Backend Batch-Sync APIs
-- [x] Create `backend/migrations/versions/008_offline_sync.py` — add `local_uuid`, `sync_source`, `synced_at` to `attendance`
-- [x] Update `backend/app/models/models.py` — add new Attendance columns
-- [x] Add `OfflineAttendanceRecord`, `OfflineSyncBatch`, `OfflineSyncResult`, `OfflineSyncResponse` schemas
-- [x] Create `backend/app/api/offline_sync.py` — batch sync endpoint + offline data APIs (with savepoint isolation & event-scope validation)
-- [x] Register `offline_sync` router in `backend/app/main.py`
+## 3. Backend Models, Services, Routers & Dependencies
+- [x] Delete `backend/app/services/embedding_service.py` and `backend/app/api/embeddings.py`
+- [x] Remove `embeddings_router` from `backend/app/main.py`
+- [x] Remove `FaceEmbedding`, `embedding_status`, `Vector`, and `AttendanceMethod.FACE` from `backend/app/models/models.py` and `models/__init__.py`
+- [x] Remove `FaceMatchResponse`, `EmbeddingOut` from `backend/app/schemas/schemas.py`
+- [x] Remove `/face-match` endpoint and numpy/embedding imports from `backend/app/api/attendance.py`
+- [x] Remove embedding generation/storage/deletion from `backend/app/api/participants.py`, `super_admin.py`, `offline_sync.py`
+- [x] Remove `pgvector` and `numpy` from `backend/requirements.txt` & `backend/requirements-dev.txt`
+- [x] Remove OpenCV apt deps from `backend/Dockerfile`
+- [x] Update `backend/tests/`
 
-## Phase 4: Volunteer App Sync Implementation
-- [x] Update `face-checkin/api_client.py` — add `sync_attendance_batch`, `download_participants`, `download_sessions`, `health_check`
-- [x] Update `face-checkin/main.py` — integrate session selection, offline auth cache, QR mode, local SQLite recording, and `OfflineSyncThread`
+## 4. Database Migrations & Docker
+- [x] Remove `pgvector` import/extension/table from `001_initial.py` and `003_event_users_coupons.py`
+- [x] Create `009_remove_face_recognition.py` to drop `face_embeddings`, `embedding_status`, `FACE` enum value, and `vector` extension
+- [x] Update `docker-compose.yml` from `pgvector/pgvector:pg16` to `postgres:16`
 
-## Phase 5: Verification
-- [x] Apply migration 008 in Docker (`008_offline_sync`)
-- [x] Build frontend (`npm run build` and `VITE_DEPLOYMENT_MODE=cloud npm run build`)
-- [x] Test batch sync API (idempotency, dedup, error handling, `/api/offline/participants`, `/api/offline/sessions`, `/api/offline/health`)
-- [x] Test offline volunteer app modules (syntax, SQLite `local_db`, `qr_scanner` payload parsing)
-- [x] Update `tasks/progress.md`
+## 5. Documentation, Rebuild & E2E Verification
+- [x] Update `README.md` and `tasks/progress.md`
+- [x] Deploy updated backend/frontend into Docker containers and run migration `009_remove_face_recognition` (Docker Hub image rebuild skipped due to transient `registry-1.docker.io` EOF)
+- [x] Verify migration `009_remove_face_recognition`, registration, QR generation, QR attendance, and dashboards

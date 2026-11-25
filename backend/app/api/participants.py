@@ -30,7 +30,6 @@ from app.models.models import (
     Attendance,
     Coupon,
     Event,
-    FaceEmbedding,
     Participant,
     ParticipantCategory,
     StoredFile,
@@ -40,7 +39,6 @@ from app.schemas.schemas import AttendanceOut, ParticipantDetail, ParticipantLis
 from app.services import storage_service
 from app.services.audit import audit_log
 from app.services.email_service import send_qr_email
-from app.services.embedding_service import generate_embedding, generate_embedding_from_bytes
 from app.services.qr_service import generate_qr_code, generate_qr_code_for_event
 
 logger = logging.getLogger(__name__)
@@ -262,7 +260,6 @@ async def register_participant(
             event_id=target_event_id,
             source=clean_source,
             status=participant_status,
-            embedding_status="PENDING",
             payment_order_id=final_payment_order_id,
             payment_status=final_payment_status,
             coupon_code=final_coupon_code,
@@ -343,19 +340,6 @@ async def register_participant(
 
     await db.flush()
     await db.refresh(participant)
-
-    if photo_bytes:
-        embedding_vec = generate_embedding_from_bytes(photo_bytes)
-        face_emb = FaceEmbedding(
-            participant_id=participant.id,
-            embedding=embedding_vec,
-        )
-        db.add(face_emb)
-        participant.embedding_status = "COMPLETED"
-        await db.flush()
-    else:
-        participant.embedding_status = "NOT_REQUIRED"
-        await db.flush()
 
     background_tasks.add_task(send_qr_email, participant.email, participant.name, "", qr_bytes)
 

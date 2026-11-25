@@ -80,7 +80,7 @@ export default function EventSuccess() {
             {attendee.photo && !photoUnavailable && (
               <div>
                 <img className="pass-photo" src={resolveMediaUrl(attendee.photo)} alt="Attendee check-in photo" onError={() => setPhotoUnavailable(true)} />
-                <span><ScanLine size={15} /> AI Face Check-In Ready</span>
+                <span><ScanLine size={15} /> QR Badge Ready</span>
               </div>
             )}
           </div>

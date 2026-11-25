@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.deps import get_current_super_admin, get_db
 from app.core.security import hash_password
-from app.models.models import Attendance, Event, FaceEmbedding, Participant, Session, StoredFile, User, UserRole
+from app.models.models import Attendance, Event, Participant, Session, StoredFile, User, UserRole
 from app.services import storage_service
 from app.schemas.schemas import (
     EventAdminOut,
@@ -350,7 +350,6 @@ async def delete_event(
     await db.execute(delete(Attendance).where(Attendance.event_id == event_id))
     p_ids = (await db.execute(select(Participant.id).where(Participant.event_id == event_id))).scalars().all()
     if p_ids:
-        await db.execute(delete(FaceEmbedding).where(FaceEmbedding.participant_id.in_(p_ids)))
         await db.execute(delete(Attendance).where(Attendance.participant_id.in_(p_ids)))
         await db.execute(delete(Participant).where(Participant.event_id == event_id))
     await db.execute(delete(Session).where(Session.event_id == event_id))

@@ -50,7 +50,6 @@ def upgrade() -> None:
         ALTER TABLE participants ADD COLUMN IF NOT EXISTS coupon_code VARCHAR(50);
         ALTER TABLE participants ALTER COLUMN source SET DEFAULT 'ONLINE';
         ALTER TABLE participants ALTER COLUMN status SET DEFAULT 'CONFIRMED';
-        ALTER TABLE participants ALTER COLUMN embedding_status SET DEFAULT 'PENDING';
     """)
 
     # 3. Create coupons table

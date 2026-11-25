@@ -4,7 +4,7 @@ import { ChartNoAxesColumn, Check, QrCode, ScanLine, Ticket, UserRound } from 'l
 
 const features = [
   [Ticket, 'Smart Registration', 'Instant ticketing, UPI checkout, and automated pass delivery.'],
-  [ScanLine, 'AI Face Check-In', 'Sub-second biometric verification for queue-free venue entry.'],
+  [ScanLine, 'Instant QR Check-In', 'Fast QR badge verification for queue-free venue entry.'],
   [QrCode, 'Live Session Tracking', 'Track workshop and keynote room occupancy across multi-track events.'],
   [ChartNoAxesColumn, 'Real-Time Event Analytics', 'Monitor check-in velocity, demographics, and export CSV reports.'],
 ]

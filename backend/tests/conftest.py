@@ -10,7 +10,7 @@ Stage S1 adds DB-dependent security tests. They are **opt-in** via the
 `GEEKAI_TEST_DB=1` environment flag; by default they skip cleanly so a local
 run never touches an unrelated Postgres that happens to be listening on the
 default port. `DATABASE_URL` reachability is a secondary guard. CI sets
-`GEEKAI_TEST_DB: "1"` and provides a disposable pgvector database, with
+`GEEKAI_TEST_DB: "1"` and provides a disposable PostgreSQL database, with
 `alembic upgrade head` run before pytest.
 """
 
@@ -112,7 +112,6 @@ async def clean_tables(db_session):
     await db_session.execute(text("TRUNCATE TABLE qr_tokens RESTART IDENTITY CASCADE"))
     await db_session.execute(text("TRUNCATE TABLE registration_jobs RESTART IDENTITY CASCADE"))
     await db_session.execute(text("TRUNCATE TABLE attendance RESTART IDENTITY CASCADE"))
-    await db_session.execute(text("TRUNCATE TABLE face_embeddings RESTART IDENTITY CASCADE"))
     await db_session.execute(text("TRUNCATE TABLE participants RESTART IDENTITY CASCADE"))
     await db_session.execute(text("TRUNCATE TABLE sessions RESTART IDENTITY CASCADE"))
     await db_session.execute(text("TRUNCATE TABLE events RESTART IDENTITY CASCADE"))

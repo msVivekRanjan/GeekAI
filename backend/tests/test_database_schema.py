@@ -22,7 +22,6 @@ from app.models.enums import ParticipantSource, ParticipantStatus, QRScope
 from app.models.models import (
     Attendance,
     AttendanceMethod,
-    FaceEmbedding,
     Participant,
     ParticipantCategory,
     Session,
@@ -110,37 +109,6 @@ async def test_counts_by_event_status_source(sample_event: Event, db_session: As
     assert counts[("IMPORTED", "ADMIN")] == 1
     assert counts[("SYNCED", "ADMIN")] == 1
     assert counts[("SYNCED", "WALK_IN")] == 1
-
-
-@pytest.mark.asyncio
-async def test_one_active_embedding_per_embedding_ready(sample_event: Event, db_session: AsyncSession):
-    ready = await _participant(db_session, sample_event.id, "ready@s2.example.com", status=ParticipantStatus.EMBEDDING_READY)
-    imported = await _participant(db_session, sample_event.id, "imported@s2.example.com", status=ParticipantStatus.IMPORTED)
-    for participant, active in ((ready, True), (imported, True), (imported, False)):
-        db_session.add(
-            FaceEmbedding(
-                participant_id=participant.id,
-                embedding=[0.1] * 512,
-                model_name="insightface",
-                model_version="unknown-not-installed",
-                dimension=512,
-                is_active=active,
-            )
-        )
-    await db_session.commit()
-
-    rows = (
-        await db_session.execute(
-            text(
-                "SELECT p.id, count(fe.id) AS active_count FROM participants p "
-                "JOIN face_embeddings fe ON fe.participant_id = p.id AND fe.is_active = true "
-                "WHERE p.status = 'EMBEDDING_READY' GROUP BY p.id"
-            )
-        )
-    ).all()
-    assert len(rows) == 1
-    assert rows[0].active_count == 1
-    assert rows[0].id == ready.id
 
 
 @pytest.mark.asyncio

@@ -22,7 +22,6 @@ from app.core.deps import get_current_staff, get_db
 from app.models.models import (
     Attendance,
     AttendanceMethod,
-    FaceEmbedding,
     Participant,
     Session,
     User,
@@ -71,18 +70,6 @@ async def download_participants(
     )
     participants = result.scalars().all()
 
-    # Fetch embeddings for all participants
-    embeddings_map: dict[int, list[float]] = {}
-    if participants:
-        emb_result = await db.execute(
-            select(FaceEmbedding).where(
-                FaceEmbedding.participant_id.in_([p.id for p in participants])
-            )
-        )
-        for emb in emb_result.scalars().all():
-            if emb.embedding is not None:
-                embeddings_map[emb.participant_id] = [float(x) for x in emb.embedding]
-
     out = []
     for p in participants:
         out.append({
@@ -96,7 +83,6 @@ async def download_participants(
             "photo_object_key": p.photo_object_key,
             "qr_code": p.qr_code_url,
             "event_id": p.event_id,
-            "embedding": embeddings_map.get(p.id),
         })
 
     return {"event_id": event_id, "count": len(out), "participants": out}
@@ -239,7 +225,7 @@ async def sync_attendance_batch(
                     results.append(OfflineSyncResult(
                         local_uuid=record.local_uuid,
                         status="error",
-                        message=f"Invalid method '{record.method}'. Must be FACE, QR, or MANUAL.",
+                        message=f"Invalid method '{record.method}'. Must be QR or MANUAL.",
                     ))
                     continue
 

@@ -1,4 +1,4 @@
-"""Attendance API — record, query, validate QR (disabled), face match.
+"""Attendance API — record, query, validate QR (disabled).
 
 Stage S1 protects every read with a staff principal and event scope, and
 disables the legacy unsigned `validate-qr` path with 410. Response shapes
@@ -7,22 +7,17 @@ are unchanged.
 
 from __future__ import annotations
 
-import os
-import tempfile
 from typing import Optional
 
-import numpy as np
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.config import settings
 from app.core.deps import get_current_staff, get_db, require_event_scope
 from app.models.models import (
     Attendance,
     AttendanceMethod,
-    FaceEmbedding,
     Participant,
     Session,
     User,
@@ -31,13 +26,11 @@ from app.schemas.schemas import (
     AttendanceCreate,
     AttendanceOut,
     AttendanceStats,
-    FaceMatchResponse,
     ParticipantOut,
     QRValidateRequest,
     QRValidateResponse,
 )
 from app.services.audit import audit_log
-from app.services.embedding_service import generate_embedding
 from app.services.events import get_active_event_id
 
 router = APIRouter(prefix="/api/attendance", tags=["attendance"])
@@ -302,99 +295,4 @@ async def validate_qr(
         valid=True,
         participant=ParticipantOut.model_validate(participant),
         message=f"Valid registration: {participant.name}",
-    )
-
-
-@router.post("/face-match", response_model=FaceMatchResponse)
-async def match_face(
-    request: Request,
-    photo: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(_staff_event),
-):
-    """Identify a participant from an uploaded face snapshot."""
-    # Save uploaded photo to a temporary file
-    suffix = os.path.splitext(photo.filename or "")[1] or ".jpg"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp_path = tmp.name
-        content = await photo.read()
-        tmp.write(content)
-
-    try:
-        query_vec = generate_embedding(tmp_path)
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-
-    query_arr = np.array(query_vec, dtype=np.float32)
-    query_norm = np.linalg.norm(query_arr)
-    if query_norm == 0 or np.all(query_arr == 0):
-        return FaceMatchResponse(
-            matched=False,
-            message="No face detected in the photo. Please ensure face is centered and clearly lit.",
-        )
-
-    query_unit = query_arr / query_norm
-
-    result = await db.execute(
-        select(FaceEmbedding).options(selectinload(FaceEmbedding.participant))
-    )
-    embeddings = result.scalars().all()
-
-    if not embeddings:
-        return FaceMatchResponse(
-            matched=False,
-            message="No participant face embeddings available in the database.",
-        )
-
-    best_match: Optional[FaceEmbedding] = None
-    best_sim = -1.0
-
-    for emb in embeddings:
-        if not emb.embedding or not emb.participant:
-            continue
-        vec = np.array(emb.embedding, dtype=np.float32)
-        v_norm = np.linalg.norm(vec)
-        if v_norm == 0:
-            continue
-        sim = float(np.dot(vec / v_norm, query_unit))
-        if sim > best_sim:
-            best_sim = sim
-            best_match = emb
-
-    MATCH_THRESHOLD = 0.40  # Consistent with face-checkin configuration
-    if best_match is None or best_sim < MATCH_THRESHOLD:
-        return FaceMatchResponse(
-            matched=False,
-            similarity=round(max(0.0, best_sim), 4),
-            message="No registered participant matched above the similarity threshold.",
-        )
-
-    participant = best_match.participant
-
-    att_res = await db.execute(
-        select(Attendance).where(
-            and_(
-                Attendance.participant_id == participant.id,
-                Attendance.session_id.is_(None),
-            )
-        )
-    )
-    existing_att = att_res.scalar_one_or_none()
-
-    await _audit(
-        db,
-        request,
-        "FACE_MATCH_ATTEMPTED",
-        current_user,
-        entity="participant",
-        entity_id=str(participant.id),
-        after={"matched": True, "similarity": round(best_sim, 4)},
-    )
-    return FaceMatchResponse(
-        matched=True,
-        participant=ParticipantOut.model_validate(participant),
-        similarity=round(best_sim, 4),
-        already_checked_in=existing_att is not None,
-        message=f"Participant identified: {participant.name}",
     )

@@ -201,3 +201,22 @@
   - Verified frontend builds cleanly in both default mode (1.77s) and `VITE_DEPLOYMENT_MODE=cloud` (1.48s, volunteer chunks excluded).
   - Tested `/api/offline/health`, `/api/offline/participants`, `/api/offline/sessions`, and `/api/offline/sync/attendance` (synced, idempotent `already_synced`, `duplicate`, and per-record error isolation).
   - Verified `face-checkin` Python compilation and unit-tested `local_db.py` + `qr_scanner.py` in `face-checkin/venv`.
+
+
+### 11. Complete Removal of Face Recognition & Pgvector (QR-Only Architecture) (Complete ✅)
+- **Removed Standalone & Frontend Face Check-in**:
+  - Deleted `face-checkin/` directory and `frontend/src/pages/volunteer/FaceCheckIn.jsx`.
+  - Removed `/volunteer/face-checkin` route from `frontend/src/App.jsx`, Face Check-In card from `VolunteerDashboard.jsx`, and `FACE` badge/copy references across `helpers.js`, `FeatureCarousel.jsx`, `EventSuccess.jsx`, `Home.jsx`, `ParticipantDetail.jsx`, and `FormBuilder.jsx`.
+- **Removed Backend Face/Embedding/Pgvector Code**:
+  - Deleted `backend/app/services/embedding_service.py` and `backend/app/api/embeddings.py`; removed `embeddings_router` from `backend/app/main.py`.
+  - Removed `FaceEmbedding`, `embedding_status`, `Vector`, and `AttendanceMethod.FACE` from `models.py` / `models/__init__.py` and `FaceMatchResponse` / `EmbeddingOut` from `schemas.py`.
+  - Removed `POST /api/attendance/face-match` from `attendance.py` and embedding logic from `participants.py`, `super_admin.py`, and `offline_sync.py`.
+  - Removed `pgvector` and `numpy` from `backend/requirements.txt` and `backend/requirements-dev.txt`, and OpenCV apt packages from `backend/Dockerfile`.
+- **Database Migration & Docker**:
+  - Created `009_remove_face_recognition.py` dropping `face_embeddings`, `participants.embedding_status`, `FACE` enum value, and `vector` extension; cleaned `001_initial.py` and `003_event_users_coupons.py`.
+  - Updated `docker-compose.yml` from `pgvector/pgvector:pg16` to `postgres:16`.
+  - Updated `README.md`, `.env.example`, `.env`, `.gitignore`, `.vercelignore`, and `backend/tests/*`.
+- **Verification**:
+  - Built frontend (`npm run build`, 2,551 modules, 0 errors, no `FaceCheckIn` chunk).
+  - Uninstalled `pgvector` and `numpy` in `geekai-backend`, applied `009_remove_face_recognition`, and verified `vector` extension and `face_embeddings` table are removed.
+  - Verified `/health`, `/api/attendance/face-match` (404/405), `/api/embeddings/sync` (404), Super Admin dashboard, participant registration, QR generation, and QR attendance recording end-to-end.

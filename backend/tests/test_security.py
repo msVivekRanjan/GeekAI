@@ -150,18 +150,6 @@ async def test_legacy_qrcode_read_returns_410(db_client, clean_tables):
 
 
 @pytest.mark.asyncio
-async def test_embeddings_sync_admin_gets_410(db_client, clean_tables):
-    admin = await _create_user(clean_tables, email="admin@s1.example.com", role=UserRole.ADMIN)
-    token = _token(admin)
-    response = await db_client.get(
-        "/api/embeddings/sync",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert response.status_code == 410
-    assert response.json()["detail"]["code"] == "BIOMETRIC_EXPORT_DISABLED"
-
-
-@pytest.mark.asyncio
 async def test_bootstrap_flow(db_client, clean_tables, db_session):
     """Fresh DB: no login; bootstrap once; second bootstrap fails; change password."""
     # No users => no login possible.

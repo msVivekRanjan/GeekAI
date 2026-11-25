@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: postgres:16
     container_name: geekai-postgres
     # All database credentials come from the root .env file (never committed).
     # The operator must create .env from .env.example before starting compose.

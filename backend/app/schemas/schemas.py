@@ -234,23 +234,6 @@ class QRValidateResponse(BaseModel):
     message: str
 
 
-class FaceMatchResponse(BaseModel):
-    matched: bool
-    participant: Optional[ParticipantOut] = None
-    similarity: float = 0.0
-    already_checked_in: bool = False
-    message: str
-
-
-# ===== Embeddings ===========================================================
-
-class EmbeddingOut(BaseModel):
-    participant_id: int
-    name: str
-    embedding: List[float]
-    photo_url: Optional[str] = None
-
-
 # ===== Admin / Dashboard ====================================================
 
 class DashboardStats(BaseModel):
@@ -506,7 +489,7 @@ class OfflineAttendanceRecord(BaseModel):
     local_uuid: UUID
     participant_id: int
     session_id: Optional[int] = None
-    method: str  # FACE | QR | MANUAL
+    method: str  # QR | MANUAL
     marked_at: Optional[str] = None  # ISO timestamp
     event_id: int
 

@@ -74,7 +74,6 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR, check_dir=False
 from app.api.admin import router as admin_router  # noqa: E402
 from app.api.attendance import router as attendance_router  # noqa: E402
 from app.api.auth import router as auth_router  # noqa: E402
-from app.api.embeddings import router as embeddings_router  # noqa: E402
 from app.api.events import router as events_router  # noqa: E402
 from app.api.offline_sync import router as offline_sync_router  # noqa: E402
 from app.api.participants import router as participants_router  # noqa: E402
@@ -87,7 +86,6 @@ app.include_router(auth_router)
 app.include_router(participants_router)
 app.include_router(sessions_router)
 app.include_router(attendance_router)
-app.include_router(embeddings_router)
 app.include_router(admin_router)
 app.include_router(events_router)
 app.include_router(payments_router)

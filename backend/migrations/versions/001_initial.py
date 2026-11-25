@@ -1,4 +1,4 @@
-"""Initial schema — users, participants, face_embeddings, sessions, attendance
+"""Initial schema — users, participants, sessions, attendance
 
 Revision ID: 001_initial
 Revises:
@@ -9,7 +9,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from pgvector.sqlalchemy import Vector
 
 # revision identifiers, used by Alembic.
 revision: str = "001_initial"
@@ -19,16 +18,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Enable pgvector extension
-    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
-
     # Create enum types
     user_role = sa.Enum("ADMIN", "VOLUNTEER", name="user_role")
     participant_category = sa.Enum(
         "STUDENT", "RESEARCHER", "PROFESSIONAL", "SPEAKER", "OTHER",
         name="participant_category",
     )
-    attendance_method = sa.Enum("FACE", "QR", "MANUAL", name="attendance_method")
+    attendance_method = sa.Enum("QR", "MANUAL", name="attendance_method")
 
     # -- users ----------------------------------------------------------------
     op.create_table(
@@ -54,21 +50,6 @@ def upgrade() -> None:
         sa.Column("photo_url", sa.String(512), nullable=True),
         sa.Column("qr_code_url", sa.String(512), nullable=True),
         sa.Column("registered_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-    )
-
-    # -- face_embeddings (pgvector) -------------------------------------------
-    op.create_table(
-        "face_embeddings",
-        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column(
-            "participant_id",
-            sa.Integer,
-            sa.ForeignKey("participants.id", ondelete="CASCADE"),
-            nullable=False,
-            index=True,
-        ),
-        sa.Column("embedding", Vector(512), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
     )
 
     # -- sessions -------------------------------------------------------------
@@ -117,10 +98,8 @@ def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS unique_event_attendance")
     op.drop_table("attendance")
     op.drop_table("sessions")
-    op.drop_table("face_embeddings")
     op.drop_table("participants")
     op.drop_table("users")
     op.execute("DROP TYPE IF EXISTS attendance_method")
     op.execute("DROP TYPE IF EXISTS participant_category")
     op.execute("DROP TYPE IF EXISTS user_role")
-    op.execute("DROP EXTENSION IF EXISTS vector")

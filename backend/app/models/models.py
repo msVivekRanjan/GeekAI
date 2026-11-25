@@ -5,7 +5,6 @@ from __future__ import annotations
 import enum
 from datetime import datetime, timezone
 
-from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     Column,
@@ -46,7 +45,6 @@ class ParticipantCategory(str, enum.Enum):
 
 
 class AttendanceMethod(str, enum.Enum):
-    FACE = "FACE"
     QR = "QR"
     MANUAL = "MANUAL"
 
@@ -102,7 +100,6 @@ class Participant(Base):
     event_id = Column(Integer, ForeignKey("events.id"), nullable=True, index=True)
     source = Column(String(9), nullable=False, default="ONLINE")
     status = Column(String(15), nullable=False, default="CONFIRMED")
-    embedding_status = Column(String(32), nullable=False, default="PENDING")
     payment_order_id = Column(String(255), nullable=True)
     payment_status = Column(String(50), nullable=True, default="PENDING")  # PENDING, SUCCESS, FAILED
     coupon_code = Column(String(50), nullable=True)
@@ -111,21 +108,8 @@ class Participant(Base):
     custom_responses = Column(JSONB, nullable=True)
 
     # Relationships
-    face_embeddings = relationship("FaceEmbedding", back_populates="participant", cascade="all, delete-orphan")
     attendances = relationship("Attendance", back_populates="participant", cascade="all, delete-orphan")
     event = relationship("Event", back_populates="participants")
-
-
-class FaceEmbedding(Base):
-    __tablename__ = "face_embeddings"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    participant_id = Column(Integer, ForeignKey("participants.id", ondelete="CASCADE"), nullable=False, index=True)
-    embedding = Column(Vector(512), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-
-    # Relationships
-    participant = relationship("Participant", back_populates="face_embeddings")
 
 
 class Session(Base):

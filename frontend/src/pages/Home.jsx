@@ -53,7 +53,7 @@ export default function Home() {
             </Link>
             <ul className="hero-entry-details" aria-label="Check-in options">
               <li>Fast QR Check-In</li>
-              <li>AI Face Verification</li>
+              <li>Instant QR Verification</li>
               <li>Zero-Paper Entry</li>
             </ul>
           </div>

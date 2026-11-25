@@ -1,11 +1,11 @@
 # GeekAI — Multi-Event Registration & Attendance Platform
 
-> AI-powered event registration, face check-in, and real-time attendance management — inspired by Unstop.
+> Event registration, QR ticketing, and real-time attendance management — inspired by Unstop.
 
 [![Docker](https://img.shields.io/badge/Docker-Compose-blue)](https://docs.docker.com/compose/)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/Frontend-React%2019-61DAFB)](https://react.dev/)
-[![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL%2016%20+%20pgvector-336791)](https://github.com/pgvector/pgvector)
+[![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL%2016-336791)](https://www.postgresql.org/)
 
 ---
 
@@ -13,12 +13,12 @@
 
 GeekAI is a multi-event platform that lets organisations host events with:
 
-- **Online registration** with photo upload and QR code generation
-- **AI face check-in** (InsightFace + pgvector cosine similarity)
-- **QR & manual session attendance** tracking per session
+- **Online registration** with dynamic forms, photo/file uploads, and QR code generation
+- **QR & manual session attendance** tracking per session and event
 - **Cashfree payment gateway** integration for paid events
+- **Cloudflare R2 storage** for participant photos, form uploads, documents, and QR codes
 - **Admin panel** for participant management, attendance, analytics, and CSV export
-- **Volunteer dashboard** for face check-in and QR scanning at the venue
+- **Volunteer dashboard** for QR scanning and manual lookup at the venue
 
 Currently hosting: **Odisha AI Conference (OAIC)** — registration fee ₹300.
 
@@ -64,7 +64,7 @@ docker compose up -d
 ```
 
 This will:
-1. Start PostgreSQL 16 + pgvector
+1. Start PostgreSQL 16 (`docker compose up -d postgres`)
 2. Apply all Alembic schema migrations automatically
 3. Seed default admin and volunteer accounts
 4. Start the FastAPI backend on port 8000
@@ -99,11 +99,10 @@ GeekAI/
 │   │   │   ├── auth.py       # Login / JWT
 │   │   │   ├── participants.py
 │   │   │   ├── sessions.py
-│   │   │   ├── attendance.py # QR, manual, face match
+│   │   │   ├── attendance.py # QR & manual attendance
 │   │   │   ├── events.py     # Multi-event API
 │   │   │   ├── payments.py   # Cashfree create-order + verify
-│   │   │   ├── admin.py      # Admin + volunteer management
-│   │   │   └── embeddings.py
+│   │   │   └── admin.py      # Admin + volunteer management
 │   │   ├── models/models.py  # SQLAlchemy ORM models
 │   │   ├── schemas/schemas.py
 │   │   ├── core/
@@ -113,8 +112,8 @@ GeekAI/
 │   │   │   └── security.py   # JWT + bcrypt
 │   │   └── services/
 │   │       ├── email_service.py
-│   │       ├── embedding_service.py  # InsightFace
-│   │       └── qr_service.py
+│   │       ├── qr_service.py
+│   │       └── storage_service.py
 │   ├── migrations/
 │   │   └── versions/
 │   │       ├── 001_initial.py
@@ -139,11 +138,6 @@ GeekAI/
 │   │   ├── context/AuthContext.jsx
 │   │   └── api/client.js         # Axios + JWT interceptors
 │   └── Dockerfile
-│
-├── face-checkin/             # Standalone Python face-check-in app
-│   ├── matcher.py            # InsightFace embedding matching
-│   ├── api_client.py         # Syncs with backend
-│   └── requirements.txt
 │
 ├── docker-compose.yml
 ├── .env.example
@@ -212,26 +206,6 @@ The event will automatically appear on the homepage under "Active Events" and it
 
 ---
 
-## Face Check-In Module
-
-The `face-checkin/` directory contains a standalone Python app for venue-side face recognition. It:
-1. Authenticates with the GeekAI backend as a volunteer
-2. Downloads face embeddings from the backend
-3. Opens a webcam and matches faces using InsightFace + cosine similarity
-4. Marks attendance via the backend API
-
-```bash
-cd face-checkin
-cp .env.example .env   # set VOLUNTEER_EMAIL, VOLUNTEER_PASSWORD, API_BASE_URL
-pip install -r requirements.txt
-python matcher.py
-```
-
-> [!NOTE]
-> Requires a physical webcam. The volunteer browser-based Face Check-In is also available at `/volunteer/face-checkin` in the main app — no separate setup needed.
-
----
-
 ## Development (without Docker)
 
 ### Backend
@@ -268,7 +242,6 @@ Key endpoints:
 | `POST` | `/api/participants/` | Register participant |
 | `POST` | `/api/auth/login` | Get JWT token |
 | `GET` | `/api/admin/volunteers` | List volunteers (admin) |
-| `POST` | `/api/attendance/face-match` | Match face image |
 | `POST` | `/api/attendance/` | Record attendance |
 
 ---

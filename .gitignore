@@ -37,10 +37,6 @@ backend/uploads/photos/*
 !backend/uploads/photos/.gitkeep
 backend/uploads/qrcodes/*
 !backend/uploads/qrcodes/.gitkeep
-face-checkin/cache/*
-!face-checkin/cache/.gitkeep
-face-checkin/cache/photos/*
-!face-checkin/cache/photos/.gitkeep
 
 # Backend test/lint caches
 .pytest_cache/
@@ -48,10 +44,6 @@ face-checkin/cache/photos/*
 
 # Generated synthetic fixtures (regenerate with backend/scripts/generate_fixtures.py)
 backend/fixtures/generated/
-
-# InsightFace models download cache (root only — do not ignore backend/app/models/)
-.insightface/
-/models/
 
 # Database data volume
 postgres_data/

@@ -1,6 +1,3 @@
-# Local-only volunteer desktop application (never deployed to Vercel)
-face-checkin/
-
 # Local development & container files
 docker-compose*.yml
 .env

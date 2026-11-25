@@ -31,8 +31,6 @@ REQUIRED_PATHS = {
     "/api/attendance/session/{session_id}",
     "/api/attendance/stats",
     "/api/attendance/validate-qr",
-    "/api/attendance/face-match",
-    "/api/embeddings/sync",
     "/api/admin/dashboard",
     "/api/admin/volunteers",
     "/api/admin/volunteers/{volunteer_id}/toggle-status",

@@ -28,7 +28,6 @@ const IS_CLOUD = import.meta.env.VITE_DEPLOYMENT_MODE === 'cloud'
 
 // Lazy-import volunteer pages only in non-cloud mode to keep cloud bundle clean.
 const VolunteerDashboard = !IS_CLOUD ? lazy(() => import('./pages/volunteer/VolunteerDashboard')) : null
-const FaceCheckIn = !IS_CLOUD ? lazy(() => import('./pages/volunteer/FaceCheckIn')) : null
 const QRScanner = !IS_CLOUD ? lazy(() => import('./pages/volunteer/QRScanner')) : null
 const ManualLookup = !IS_CLOUD ? lazy(() => import('./pages/volunteer/ManualLookup')) : null
 
@@ -97,7 +96,6 @@ export default function App() {
         >
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<VolunteerDashboard />} />
-          <Route path="face-checkin" element={<FaceCheckIn />} />
           <Route path="scan" element={<QRScanner />} />
           <Route path="manual" element={<ManualLookup />} />
         </Route>
