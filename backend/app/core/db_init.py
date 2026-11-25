@@ -87,7 +87,11 @@ async def run_migrations_async() -> None:
 
 
 async def init_super_admin_async() -> None:
-    """Ensure the Super Admin user exists and has the correct password and role."""
+    """Ensure the Super Admin user exists when SEED_ADMIN_* env vars are explicitly set."""
+    if not settings.SEED_ADMIN_EMAIL or not settings.SEED_ADMIN_PASSWORD:
+        logger.info("SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD not set; skipping super admin seed.")
+        return
+
     from datetime import datetime, timezone
     from sqlalchemy import select
     from app.core.deps import async_session_factory

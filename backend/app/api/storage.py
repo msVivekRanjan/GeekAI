@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -107,6 +108,12 @@ async def local_upload(
     file: UploadFile = File(...),
 ):
     """Local development fallback upload endpoint matching the presigned upload flow."""
+    if os.getenv("VERCEL"):
+        raise HTTPException(
+            status_code=403,
+            detail="Local filesystem uploads are disabled in Vercel production. Configure Cloudflare R2.",
+        )
+
     # Prevent path traversal
     cleaned = object_key.strip().lstrip("/")
     if ".." in cleaned or not cleaned.startswith("events/"):
@@ -135,8 +142,12 @@ async def confirm_upload(
     db: AsyncSession = Depends(get_db),
 ):
     """Record uploaded file object_key and metadata in PostgreSQL."""
+    cleaned_key = body.object_key.strip().lstrip("/")
+    if ".." in cleaned_key or not cleaned_key.startswith("events/"):
+        raise HTTPException(status_code=400, detail="Invalid object_key")
+
     existing = (await db.execute(
-        select(StoredFile).where(StoredFile.object_key == body.object_key)
+        select(StoredFile).where(StoredFile.object_key == cleaned_key)
     )).scalar_one_or_none()
     if existing:
         return {"id": existing.id, "object_key": existing.object_key, "public_url": existing.public_url}

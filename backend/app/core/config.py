@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -23,6 +24,36 @@ class Settings(BaseSettings):
 
     # Database — placeholder is intentionally unusable.
     DATABASE_URL: str = "postgresql+asyncpg://<user>:<password>@localhost:5432/geekai"
+
+    @property
+    def async_database_url(self) -> str:
+        """Normalize DATABASE_URL for asyncpg, stripping libpq-only query params."""
+        url = self.DATABASE_URL.strip()
+        if url.startswith("postgres://"):
+            url = "postgresql+asyncpg://" + url[len("postgres://"):]
+        elif url.startswith("postgresql://"):
+            url = "postgresql+asyncpg://" + url[len("postgresql://"):]
+        parsed = urlparse(url)
+        if parsed.query:
+            qs = parse_qs(parsed.query, keep_blank_values=True)
+            qs.pop("sslmode", None)
+            qs.pop("channel_binding", None)
+            new_query = urlencode(qs, doseq=True)
+            url = urlunparse(parsed._replace(query=new_query))
+        return url
+
+    @property
+    def async_connect_args(self) -> Dict[str, Any]:
+        """Pass SSL context to asyncpg when connecting to Neon or sslmode=require."""
+        raw = self.DATABASE_URL.lower()
+        if "sslmode=require" in raw or "neon.tech" in raw:
+            return {"ssl": "require"}
+        return {}
+
+    @property
+    def is_serverless_db(self) -> bool:
+        """True when running in Vercel serverless or targeting a Neon pooler."""
+        return bool(os.getenv("VERCEL")) or "-pooler" in self.DATABASE_URL
 
     # JWT — placeholder is intentionally unusable. Generate a real secret and
     # supply it via the environment or a secrets manager.
@@ -137,9 +168,9 @@ class Settings(BaseSettings):
     # the users table (null = change required on next login). No column is
     # added here; the migration creates it.
 
-    # Seed Admin / Super Admin (auto-initialized at startup)
-    SEED_ADMIN_EMAIL: str = "admin@geekai.in"
-    SEED_ADMIN_PASSWORD: str = "admin123"
+    # Seed Admin / Super Admin (explicitly configured via environment; no insecure defaults)
+    SEED_ADMIN_EMAIL: str = ""
+    SEED_ADMIN_PASSWORD: str = ""
     SEED_ADMIN_NAME: str = "Super Admin"
 
 

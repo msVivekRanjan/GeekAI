@@ -19,13 +19,19 @@
       }
     },
     {
-      "source": "/uploads/(.*)",
+      "source": "/health",
       "destination": {
         "service": "backend"
       }
     },
     {
-      "source": "/health",
+      "source": "/docs",
+      "destination": {
+        "service": "backend"
+      }
+    },
+    {
+      "source": "/openapi.json",
       "destination": {
         "service": "backend"
       }

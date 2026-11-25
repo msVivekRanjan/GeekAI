@@ -16,6 +16,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 from app.core.security import decode_access_token, token_claims
@@ -25,7 +26,18 @@ from app.models.models import User, UserRole
 # Database engine & session factory (initialised once at import time)
 # ---------------------------------------------------------------------------
 
-engine = create_async_engine(settings.DATABASE_URL, echo=False, future=True)
+_engine_kwargs: dict = {
+    "echo": False,
+    "future": True,
+    "connect_args": settings.async_connect_args,
+}
+if settings.is_serverless_db:
+    _engine_kwargs["poolclass"] = NullPool
+else:
+    _engine_kwargs["pool_pre_ping"] = True
+    _engine_kwargs["pool_recycle"] = 300
+
+engine = create_async_engine(settings.async_database_url, **_engine_kwargs)
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 

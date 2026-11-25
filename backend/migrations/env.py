@@ -17,8 +17,8 @@ from app.models import Base
 # Alembic Config object
 config = context.config
 
-# Override sqlalchemy.url from application settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Override sqlalchemy.url from application settings (supports Neon direct URLs)
+config.set_main_option("sqlalchemy.url", settings.async_database_url)
 
 # Logging
 if config.config_file_name is not None:
@@ -53,6 +53,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=settings.async_connect_args,
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

@@ -7,6 +7,7 @@ adds request-id middleware and structured JSON logging with PII redaction.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
 
@@ -15,7 +16,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
-from app.core.db_init import run_migrations_async
 
 # Structured JSON logging with redaction of emails, phones and tokens.
 from app.logging_config import configure_logging
@@ -26,19 +26,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application startup / shutdown lifecycle."""
-    settings.photos_dir
-    settings.qrcodes_dir
-    logger.info("GeekAI backend starting — upload directories ready")
-
-    # Ensure database schema is migrated before accepting traffic.
-    await run_migrations_async()
-
-    # Ensure Super Admin account is initialized
-    from app.core.db_init import init_super_admin_async
-    await init_super_admin_async()
+    logger.info("GeekAI backend starting")
 
     yield
+
     logger.info("GeekAI backend shutting down")
 
 
@@ -63,10 +54,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Public static file serving for uploads (photos, QR codes).
-# These files are served unauthenticated via /uploads/ so the admin
-# dashboard can display them directly in <img> tags.
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR, check_dir=False), name="uploads")
+# Mount local /uploads only in non-Vercel local development when STORAGE_BACKEND=local
+if not os.getenv("VERCEL") and settings.STORAGE_BACKEND.strip().lower() == "local":
+    app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR, check_dir=False), name="uploads")
+
 
 # ---------------------------------------------------------------------------
 # Routers
