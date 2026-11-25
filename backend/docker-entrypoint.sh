@@ -31,7 +31,7 @@ EOF
 echo "GeekAI Backend: Checking and applying database migrations..."
 if ! alembic upgrade head; then
     echo "GeekAI Backend: Alembic upgrade failed (possible revision drift). Synchronizing to head..."
-    alembic stamp head || true
+    alembic stamp head --purge || true
     alembic upgrade head || true
 fi
 echo "GeekAI Backend: Database schema is up to date."

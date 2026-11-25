@@ -61,7 +61,7 @@ def run_migrations(max_retries: int = 5, retry_interval: float = 2.0) -> None:
             if "Can't locate revision" in str(exc):
                 logger.warning("Unknown revision in database schema, synchronizing with stamp head...")
                 try:
-                    command.stamp(alembic_cfg, "head")
+                    command.stamp(alembic_cfg, "head", purge=True)
                     command.upgrade(alembic_cfg, "head")
                     logger.info("Database migrations synchronized and applied successfully.")
                     return
