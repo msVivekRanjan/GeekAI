@@ -239,110 +239,73 @@ export default function EventEditor() {
     }
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64 text-gray-500">Loading event…</div>
-  )
+  if (loading) return <div className="sa-state" role="status">Loading event…</div>
 
   return (
-    <div className="max-w-2xl">
-      <div className="flex items-center gap-3 mb-8">
-        <Link to="/super-admin/events" className="text-gray-500 hover:text-gray-900 transition-colors">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div>
-          <h2 className="text-2xl font-extrabold text-gray-900">{isEdit ? 'Edit Event' : 'New Event'}</h2>
-          <p className="text-gray-500 text-sm mt-0.5">Configure event details, payments and settings</p>
+    <form onSubmit={handleSubmit} className="sa-page sa-editor">
+      <div className="sa-page-header sa-sticky">
+        <div className="sa-page-heading">
+          <Link to="/super-admin/events" className="sa-icon sa-back" aria-label="Back to events"><ArrowLeft size={19} /></Link>
+          <h1>{isEdit ? 'Edit Event' : 'New Event'}</h1>
+        </div>
+        <div className="sa-header-actions">
+          <Link to="/super-admin/events" className="sa-button sa-quiet">Cancel</Link>
+          {isEdit && <Link to={`/super-admin/events/${id}/form-builder`} className="sa-button">Configure Form Builder</Link>}
+          <button type="submit" disabled={saving} className="sa-button sa-primary">
+            <Save size={16} /> {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Event'}
+          </button>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
-          <h3 className="font-semibold text-gray-900 border-b border-gray-100 pb-3">Basic Information</h3>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Event Name *</label>
-            <input
-              name="name" value={form.name} onChange={handleChange} required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
-              placeholder="Odisha AI Conference 2026"
-            />
+      <div className="sa-editor-grid">
+        <section className="sa-panel sa-form-panel">
+          <h2>Event Identity</h2>
+          <div className="sa-form-pair">
+            <label>Event Name <span aria-hidden="true">*</span>
+              <input name="name" value={form.name} onChange={handleChange} required placeholder="Odisha AI Conference 2026" />
+            </label>
+            <label>URL Slug <span aria-hidden="true">*</span>
+              <span className="sa-affixed">
+                <code aria-hidden="true">/events/</code>
+                <input name="slug" value={form.slug} onChange={handleChange} required
+                  pattern="[a-z0-9-]+" title="Only lowercase letters, numbers and hyphens"
+                  placeholder="oaic" disabled={isEdit} aria-describedby={isEdit ? 'event-slug-hint' : undefined} />
+              </span>
+              {isEdit && <small id="event-slug-hint">The slug is fixed after creation.</small>}
+            </label>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">URL Slug *</label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-400">/events/</span>
-              <input
-                name="slug" value={form.slug} onChange={handleChange} required
-                pattern="[a-z0-9-]+" title="Only lowercase letters, numbers and hyphens"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
-                placeholder="oaic"
-                disabled={isEdit}
-              />
+          <label>Tagline
+            <input name="tagline" value={form.tagline} onChange={handleChange} placeholder="Short event tagline" />
+          </label>
+          <label>Description
+            <textarea name="description" value={form.description} onChange={handleChange} rows={3}
+              placeholder="Describe the event…" />
+          </label>
+        </section>
+        <div className="sa-form-column">
+          <section className="sa-panel sa-form-panel">
+            <h2>Logistics</h2>
+            <div className="sa-form-pair">
+              <label>Event Date<input name="event_date" type="datetime-local" value={form.event_date} onChange={handleChange} /></label>
+              <label>Registration Deadline<input name="registration_deadline" type="datetime-local" value={form.registration_deadline} onChange={handleChange} /></label>
             </div>
-            {isEdit && <p className="text-xs text-gray-400 mt-1">Slug cannot be changed after creation.</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tagline</label>
-            <input
-              name="tagline" value={form.tagline} onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
-              placeholder="Short, catchy tagline for the event"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              name="description" value={form.description} onChange={handleChange} rows={4}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none resize-none"
-              placeholder="Full event description…"
-            />
-          </div>
+            <label>Venue<input name="venue" value={form.venue} onChange={handleChange} placeholder="Venue name" /></label>
+            <label>Event Website
+              <input name="website" type="url" value={form.website} onChange={handleChange} placeholder="https://oaic.in" />
+            </label>
+          </section>
+          <section className="sa-panel sa-form-panel">
+            <h2>Branding</h2>
+            <div className="sa-form-pair">
+              <label>Logo URL<input name="logo_url" value={form.logo_url} onChange={handleChange} placeholder="https://…" /><small>Event logo image.</small></label>
+              <label>Banner URL<input name="banner_url" value={form.banner_url} onChange={handleChange} placeholder="https://…" /><small>Event banner image.</small></label>
+            </div>
+          </section>
         </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
-          <h3 className="font-semibold text-gray-900 border-b border-gray-100 pb-3">Logistics</h3>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Event Date</label>
-              <input
-                name="event_date" type="datetime-local" value={form.event_date} onChange={handleChange}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Registration Deadline</label>
-              <input
-                name="registration_deadline" type="datetime-local" value={form.registration_deadline} onChange={handleChange}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Venue</label>
-            <input
-              name="venue" value={form.venue} onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
-              placeholder="KIIT University, Bhubaneswar"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Event Website</label>
-            <input
-              name="website" type="url" value={form.website} onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
-              placeholder="https://oaic.in"
-            />
-          </div>
-        </div>
-
+      </div>
+      <div className="sa-editor-grid sa-event-settings">
         {/* Cashfree Payment Settings Card */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
+        <div className="sa-panel sa-settings-panel p-6 space-y-5">
           <div className="flex items-center justify-between border-b border-gray-100 pb-3">
             <div className="flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-gray-700" />
@@ -568,7 +531,7 @@ export default function EventEditor() {
         </div>
 
         {/* Registration Guidelines Card */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+        <div className="sa-panel sa-settings-panel p-6 space-y-4">
           <div className="flex items-center justify-between border-b border-gray-100 pb-3">
             <div className="flex items-center gap-2">
               <List className="h-5 w-5 text-gray-700" />
@@ -577,7 +540,7 @@ export default function EventEditor() {
             <button
               type="button"
               onClick={handleLoadDefaultGuidelines}
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+              className="sa-text-action"
             >
               Load Preset Guidelines
             </button>
@@ -618,48 +581,7 @@ export default function EventEditor() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
-          <h3 className="font-semibold text-gray-900 border-b border-gray-100 pb-3">Branding</h3>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Logo URL</label>
-            <input
-              name="logo_url" value={form.logo_url} onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
-              placeholder="https://…"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Banner URL</label>
-            <input
-              name="banner_url" value={form.banner_url} onChange={handleChange}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none"
-              placeholder="https://…"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-semibold hover:bg-gray-800 transition-colors disabled:opacity-60 cursor-pointer"
-          >
-            <Save className="h-4 w-4" />
-            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Event'}
-          </button>
-          {isEdit && (
-            <Link
-              to={`/super-admin/events/${id}/form-builder`}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors"
-            >
-              Configure Form Builder →
-            </Link>
-          )}
-          <Link to="/super-admin/events" className="text-sm text-gray-500 hover:text-gray-900 transition-colors">
-            Cancel
-          </Link>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   )
 }
