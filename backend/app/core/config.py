@@ -7,6 +7,7 @@ production; real values must come from the environment or a secrets vault.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import List
 
@@ -47,7 +48,14 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> List[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        for env_key in ("VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL"):
+            host = os.getenv(env_key, "").strip()
+            if host:
+                origin = host if host.startswith("http") else f"https://{host}"
+                if origin not in origins:
+                    origins.append(origin)
+        return origins
 
     # SMTP
     SMTP_HOST: str = ""
@@ -63,7 +71,7 @@ class Settings(BaseSettings):
 
     # Uploads & Storage
     STORAGE_BACKEND: str = "local"  # "local" or "r2"
-    UPLOAD_DIR: str = "uploads"
+    UPLOAD_DIR: str = "/tmp/uploads" if os.getenv("VERCEL") else "uploads"
 
     # Global Cloudflare R2 Fallback (per-event settings override these)
     R2_ACCOUNT_ID: str = ""
@@ -86,6 +94,16 @@ class Settings(BaseSettings):
     CASHFREE_SECRET_KEY: str = ""
     CASHFREE_ENV: str = "sandbox"  # "sandbox" or "production"
     BACKEND_URL: str = "http://localhost:8000"
+
+    @property
+    def effective_backend_url(self) -> str:
+        """Resolve public backend base URL, using Vercel deployment URL when BACKEND_URL is localhost."""
+        if self.BACKEND_URL and not self.BACKEND_URL.startswith("http://localhost"):
+            return self.BACKEND_URL.rstrip("/")
+        vercel_host = os.getenv("VERCEL_PROJECT_PRODUCTION_URL") or os.getenv("VERCEL_URL")
+        if vercel_host:
+            return vercel_host if vercel_host.startswith("http") else f"https://{vercel_host}"
+        return self.BACKEND_URL.rstrip("/")
 
     @property
     def cashfree_configured(self) -> bool:

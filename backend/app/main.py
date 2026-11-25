@@ -66,7 +66,7 @@ app.add_middleware(
 # Public static file serving for uploads (photos, QR codes).
 # These files are served unauthenticated via /uploads/ so the admin
 # dashboard can display them directly in <img> tags.
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR, check_dir=False), name="uploads")
 
 # ---------------------------------------------------------------------------
 # Routers
