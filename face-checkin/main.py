@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """
-GeekAI Face Check-In — Main Application
-========================================
-Local face-recognition check-in for the Odisha AI Symposium.
-Captures webcam frames, detects faces, matches them against
-participant embeddings synced from the cloud backend, and records
-attendance after volunteer confirmation.
+GeekAI Offline Volunteer Check-In Application
+=============================================
+Standalone locally-run check-in app supporting:
+  - Offline & online Face Recognition (InsightFace)
+  - Offline & online QR Code Scanning
+  - Offline & online Manual Participant Lookup
+  - Session selection (event-level check-in or session-level attendance)
+  - Local SQLite persistence & automatic background batch-sync to cloud
 
 Controls:
-    Y — Confirm check-in for matched participant
-    N — Reject current match
-    M — Manual participant lookup (terminal input)
-    S — Re-sync embeddings from backend
+    Y — Confirm face check-in for matched participant
+    N — Reject current face match
+    R — Toggle between FACE and QR scanning modes
+    C — Change active session
+    M — Manual participant lookup (terminal input, offline-capable)
+    S — Sync participants/sessions & push pending attendance
     Q — Quit
 """
 
@@ -25,8 +29,20 @@ import numpy as np
 
 from api_client import APIClient
 from config import config
-from face_detector import FaceDetector, DetectedFace
+from face_detector import DetectedFace, FaceDetector
+from local_db import (
+    cache_volunteer,
+    get_attendance_counts,
+    get_cached_volunteer,
+    get_sessions,
+    has_local_attendance,
+    init_db,
+    record_attendance_local,
+    search_participants as search_local_participants,
+)
 from matcher import EmbeddingMatcher, MatchResult
+from offline_sync import OfflineSyncThread
+from qr_scanner import handle_qr_scan
 from sync import EmbeddingSync
 from ui import CheckInUI, draw_no_match_overlay
 
@@ -51,46 +67,62 @@ class AppState:
         self.pending_confirm = False
         self.last_sync_time = 0.0
         self.running = True
+        self.mode = "FACE"  # "FACE" or "QR"
+        self.session_id: Optional[int] = None
+        self.session_name: str = "Event Check-In (All)"
+        self.last_qr_scan_time: float = 0.0
 
 
 # ------------------------------------------------------------------ #
-#  Manual lookup (terminal-based)                                     #
+#  Session selector (terminal-based)                                  #
 # ------------------------------------------------------------------ #
-def manual_lookup(api: APIClient) -> None:
-    """Prompt the volunteer in the terminal to search for a participant
-    and optionally record attendance."""
-    print("\n=== Manual Participant Lookup ===")
-    query = input("Enter name or participant ID: ").strip()
+def select_session(event_id: int) -> tuple[Optional[int], str]:
+    """Prompt the volunteer to select Event Check-In or a specific Session."""
+    sessions = get_sessions(event_id)
+    if not sessions:
+        print("\nNo sessions cached — using Event-Level Check-In (session_id=None).")
+        return None, "Event Check-In"
+
+    print("\n=== Select Attendance Target ===")
+    print("  0. Event Check-In (General / Gate Entry)")
+    for i, s in enumerate(sessions, 1):
+        loc = f" @ {s['location']}" if s.get("location") else ""
+        print(f"  {i}. {s['name']}{loc}")
+
+    choice = input("Select number [0]: ").strip()
+    if not choice or choice == "0":
+        return None, "Event Check-In"
+    if choice.isdigit():
+        idx = int(choice) - 1
+        if 0 <= idx < len(sessions):
+            s = sessions[idx]
+            return s["id"], s["name"]
+    print("Invalid selection, defaulting to Event Check-In.")
+    return None, "Event Check-In"
+
+
+# ------------------------------------------------------------------ #
+#  Manual lookup (offline-first via local SQLite)                     #
+# ------------------------------------------------------------------ #
+def manual_lookup(event_id: int, session_id: Optional[int]) -> None:
+    """Search cached participants in SQLite and record attendance locally."""
+    print("\n=== Manual Participant Lookup (Offline-Capable) ===")
+    query = input("Enter name, email, or participant ID: ").strip()
     if not query:
         print("Cancelled.")
         return
 
-    # Check if the query is a numeric ID
-    if query.isdigit():
-        participant = api.get_participant(int(query))
-        if participant:
-            results = [participant]
-        else:
-            print(f"No participant found with ID {query}")
-            return
-    else:
-        results = api.search_participants(query)
-
+    results = [
+        p for p in search_local_participants(query)
+        if p.get("event_id") == event_id
+    ]
     if not results:
-        print("No participants found.")
+        print("No matching participants in local cache.")
         return
-
-    # Handle both list and paginated dict responses
-    if isinstance(results, dict):
-        results = results.get("items", results.get("results", [results]))
 
     print(f"\nFound {len(results)} result(s):")
     for i, p in enumerate(results[:10], 1):
-        pid = p.get("id", p.get("participant_id", "?"))
-        name = p.get("name", "Unknown")
-        inst = p.get("institution", "")
-        cat = p.get("category", "")
-        print(f"  {i}. [{pid}] {name} — {inst} ({cat})")
+        print(f"  {i}. [{p['id']}] {p['name']} — {p.get('institution') or ''} ({p.get('category') or ''})")
 
     choice = input("\nSelect number to check in (or Enter to cancel): ").strip()
     if not choice or not choice.isdigit():
@@ -100,18 +132,20 @@ def manual_lookup(api: APIClient) -> None:
     idx = int(choice) - 1
     if 0 <= idx < len(results):
         p = results[idx]
-        pid = p.get("id", p.get("participant_id"))
+        pid = p["id"]
         name = p.get("name", "Unknown")
+        if has_local_attendance(pid, session_id):
+            print(f"⚠  Attendance already recorded locally for {name}")
+            return
         confirm = input(f"Record attendance for {name} (ID {pid})? [y/N]: ").strip().lower()
         if confirm == "y":
-            result = api.record_attendance(pid, method="MANUAL")
-            status = result.get("status", "")
-            if status == "duplicate":
-                print(f"⚠  Attendance already recorded for {name}")
-            elif status == "error":
-                print(f"✗  Error: {result.get('message')}")
-            else:
-                print(f"✓  Attendance recorded for {name}")
+            record_attendance_local(
+                participant_id=pid,
+                event_id=event_id,
+                method="MANUAL",
+                session_id=session_id,
+            )
+            print(f"✓  Attendance queued locally for {name}")
         else:
             print("Cancelled.")
     else:
@@ -119,76 +153,105 @@ def manual_lookup(api: APIClient) -> None:
 
 
 # ------------------------------------------------------------------ #
+#  Authentication (online with offline cache fallback)                #
+# ------------------------------------------------------------------ #
+def authenticate(api: APIClient, event_id: int) -> bool:
+    """Authenticate online and cache JWT, or fall back to cached offline token."""
+    logger.info("Authenticating with backend at %s …", config.API_URL)
+    if api.login():
+        cache_volunteer(
+            email=config.VOLUNTEER_EMAIL,
+            token=api.token or "",
+            event_id=event_id,
+            volunteer_id=None,
+        )
+        return True
+
+    cached = get_cached_volunteer(config.VOLUNTEER_EMAIL)
+    if cached and cached.get("token"):
+        api.token = cached["token"]
+        api.session.headers.update({"Authorization": f"Bearer {api.token}"})
+        logger.warning("Backend unreachable — authenticated via offline volunteer cache.")
+        return True
+
+    return False
+
+
+# ------------------------------------------------------------------ #
 #  Main loop                                                          #
 # ------------------------------------------------------------------ #
 def main() -> None:
-    logger.info("Starting GeekAI Face Check-In")
+    logger.info("Starting GeekAI Offline Volunteer Check-In")
+    init_db()
+    event_id = config.EVENT_ID
 
     # 1. Initialise components
     api = APIClient()
     detector = FaceDetector()
     matcher = EmbeddingMatcher()
-    syncer = EmbeddingSync(api)
+    syncer = EmbeddingSync(api, event_id=event_id)
     ui = CheckInUI()
     state = AppState()
 
-    # 2. Authenticate
-    logger.info("Logging in to backend at %s …", config.API_URL)
-    if not api.login():
-        logger.error(
-            "Authentication failed. Check VOLUNTEER_EMAIL / VOLUNTEER_PASSWORD "
-            "and ensure the backend is running at %s",
-            config.API_URL,
-        )
+    # 2. Authenticate (online or offline cache)
+    if not authenticate(api, event_id):
         print(
-            "\n✗  Could not log in to the backend.\n"
+            "\n✗  Could not authenticate online and no offline volunteer cache found.\n"
             f"   URL:   {config.API_URL}\n"
             f"   Email: {config.VOLUNTEER_EMAIL}\n"
-            "   Check your .env file and make sure the backend is running.\n"
+            "   Please connect to the internet for first-time login.\n"
         )
         sys.exit(1)
 
-    # 3. Sync embeddings
-    logger.info("Syncing embeddings …")
+    # 3. Sync participants, embeddings, and sessions (falls back to SQLite if offline)
+    logger.info("Syncing event %d data …", event_id)
     records = syncer.initial_sync()
     loaded = matcher.load_embeddings(records)
     state.last_sync_time = time.time()
     logger.info("Ready — %d participant embeddings loaded", loaded)
 
-    # 4. Load InsightFace model (lazy, but trigger it now for feedback)
+    # 4. Select session / mode
+    state.session_id, state.session_name = select_session(event_id)
+
+    # 5. Start background offline sync thread
+    sync_thread = OfflineSyncThread(api, event_id=event_id)
+    sync_thread.start()
+
+    # 6. Load InsightFace model
     logger.info("Loading face detection model '%s' …", config.MODEL_NAME)
     try:
-        detector._ensure_loaded()  # noqa: SLF001 — intentional early load
+        detector._ensure_loaded()  # noqa: SLF001
     except RuntimeError as exc:
         logger.error(str(exc))
         print(f"\n✗  {exc}\n")
+        sync_thread.stop()
         sys.exit(1)
 
-    # 5. Open webcam
+    # 7. Open webcam
     logger.info("Opening camera %d …", config.CAMERA_INDEX)
     cap = cv2.VideoCapture(config.CAMERA_INDEX)
     if not cap.isOpened():
         logger.error("Cannot open camera index %d", config.CAMERA_INDEX)
-        print(
-            f"\n✗  Cannot open camera (index {config.CAMERA_INDEX}).\n"
-            "   Make sure a webcam is connected and the index is correct.\n"
-        )
+        print(f"\n✗  Cannot open camera (index {config.CAMERA_INDEX}).\n")
+        sync_thread.stop()
         sys.exit(1)
 
-    # 6. Init UI
+    # 8. Init UI
     ui.init_window()
+    counts = get_attendance_counts()
     ui.set_connection_info(
-        connected=True,
+        connected=sync_thread.is_online,
         embeddings=matcher.count,
         last_sync=time.strftime("%H:%M:%S", time.localtime(state.last_sync_time)),
+        pending_count=counts.get("PENDING", 0) + counts.get("FAILED", 0),
     )
+    ui.set_session_info(state.session_name, state.mode)
     ui.set_status("Ready — point camera at participant", (0, 200, 0))
 
     logger.info("Entering main loop. Press Q to quit.")
 
     try:
         while state.running:
-            # Capture frame
             ret, frame = cap.read()
             if not ret:
                 ui.set_status("Camera error — no frame", (0, 0, 220))
@@ -198,29 +261,40 @@ def main() -> None:
                     break
                 continue
 
-            # Detect faces
+            # Update sync & pending indicator
+            ui.set_sync_status(sync_thread.is_online, sync_thread.pending_count)
+
             faces: list[DetectedFace] = []
-            try:
-                faces = detector.detect_faces(frame)
-            except Exception as exc:
-                logger.warning("Detection error: %s", exc)
+            if state.mode == "FACE":
+                try:
+                    faces = detector.detect_faces(frame)
+                except Exception as exc:
+                    logger.warning("Detection error: %s", exc)
 
-            # Match the largest / most prominent face
-            match: Optional[MatchResult] = None
-            if faces and not state.pending_confirm:
-                # Pick the face with the highest detection score
-                best_face = max(faces, key=lambda f: f.score)
-                match = matcher.find_match(best_face.embedding)
-                if match:
-                    state.current_match = match
-                    state.pending_confirm = True
-                    ui.set_status(f"Match: {match.name} ({match.similarity:.0%})", (0, 220, 220))
-                    # Attempt to ensure photo is cached
-                    api.download_photo(match.participant_id, match.photo_url)
-                else:
-                    state.current_match = None
+                if faces and not state.pending_confirm:
+                    best_face = max(faces, key=lambda f: f.score)
+                    match = matcher.find_match(best_face.embedding)
+                    if match:
+                        state.current_match = match
+                        state.pending_confirm = True
+                        ui.set_status(f"Match: {match.name} ({match.similarity:.0%})", (0, 220, 220))
+                        api.download_photo(match.participant_id, match.photo_url)
+                    else:
+                        state.current_match = None
+            else:
+                # QR mode
+                if time.time() - state.last_qr_scan_time > 2.0:
+                    participant, msg = handle_qr_scan(
+                        frame,
+                        event_id=event_id,
+                        session_id=state.session_id,
+                    )
+                    if msg:
+                        state.last_qr_scan_time = time.time()
+                        col = (0, 200, 0) if participant and msg.startswith("✓") else (0, 220, 220)
+                        ui.flash(msg, col, duration=2.5)
+                        ui.set_status(msg, col)
 
-            # Render
             canvas = ui.render_frame(
                 frame,
                 faces=faces,
@@ -228,7 +302,7 @@ def main() -> None:
                 pending_confirm=state.pending_confirm,
             )
 
-            if not faces:
+            if state.mode == "FACE" and not faces:
                 draw_no_match_overlay(canvas)
                 ui.set_status("No face detected", (0, 0, 220))
 
@@ -239,17 +313,19 @@ def main() -> None:
                 state.running = False
 
             elif key == ord("y") and state.pending_confirm and state.current_match:
-                result = api.record_attendance(state.current_match.participant_id)
-                status = result.get("status", "")
-                if status == "duplicate":
-                    ui.flash(f"Already checked in: {state.current_match.name}", (0, 220, 220))
-                    logger.info("Duplicate attendance for %s", state.current_match.name)
-                elif status == "error":
-                    ui.flash(f"Error: {result.get('message', 'unknown')}", (0, 0, 220))
-                    logger.error("Attendance error: %s", result)
+                pid = state.current_match.participant_id
+                name = state.current_match.name
+                if has_local_attendance(pid, state.session_id):
+                    ui.flash(f"Already checked in: {name}", (0, 220, 220))
                 else:
-                    ui.flash(f"Checked in: {state.current_match.name}", (0, 200, 0))
-                    logger.info("Checked in: %s (ID %d)", state.current_match.name, state.current_match.participant_id)
+                    record_attendance_local(
+                        participant_id=pid,
+                        event_id=event_id,
+                        method="FACE",
+                        session_id=state.session_id,
+                    )
+                    ui.flash(f"Checked in: {name}", (0, 200, 0))
+                    logger.info("Local FACE check-in: %s (ID %d)", name, pid)
                 state.current_match = None
                 state.pending_confirm = False
                 ui.set_status("Ready — point camera at participant", (0, 200, 0))
@@ -260,41 +336,46 @@ def main() -> None:
                 state.pending_confirm = False
                 ui.set_status("Ready — point camera at participant", (0, 200, 0))
 
+            elif key == ord("r"):
+                state.mode = "QR" if state.mode == "FACE" else "FACE"
+                state.current_match = None
+                state.pending_confirm = False
+                ui.set_session_info(state.session_name, state.mode)
+                ui.flash(f"Switched to {state.mode} mode", (0, 220, 220), duration=1.5)
+
+            elif key == ord("c"):
+                state.current_match = None
+                state.pending_confirm = False
+                state.session_id, state.session_name = select_session(event_id)
+                ui.set_session_info(state.session_name, state.mode)
+                ui.flash(f"Session: {state.session_name}", (0, 220, 220), duration=2.0)
+
             elif key == ord("m"):
-                # Pause UI loop for manual lookup in terminal
                 state.pending_confirm = False
                 state.current_match = None
-                manual_lookup(api)
+                manual_lookup(event_id, state.session_id)
                 ui.set_status("Ready — point camera at participant", (0, 200, 0))
 
             elif key == ord("s"):
-                ui.set_status("Syncing embeddings …", (0, 220, 220))
+                ui.set_status("Syncing …", (0, 220, 220))
                 ui.flash("Syncing …", (0, 220, 220), duration=1.0)
+                sync_thread.trigger_sync()
                 records = syncer.refresh()
                 loaded = matcher.load_embeddings(records)
                 state.last_sync_time = time.time()
                 ui.set_connection_info(
-                    connected=True,
+                    connected=sync_thread.is_online,
                     embeddings=matcher.count,
                     last_sync=time.strftime("%H:%M:%S", time.localtime(state.last_sync_time)),
+                    pending_count=sync_thread.pending_count,
                 )
                 ui.set_status("Ready — point camera at participant", (0, 200, 0))
-                ui.flash(f"Synced — {loaded} embeddings loaded", (0, 200, 0))
-
-            # Auto re-sync
-            if time.time() - state.last_sync_time > config.SYNC_INTERVAL:
-                records = syncer.refresh()
-                matcher.load_embeddings(records)
-                state.last_sync_time = time.time()
-                ui.set_connection_info(
-                    connected=True,
-                    embeddings=matcher.count,
-                    last_sync=time.strftime("%H:%M:%S", time.localtime(state.last_sync_time)),
-                )
+                ui.flash(f"Synced — {loaded} faces loaded", (0, 200, 0))
 
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
     finally:
+        sync_thread.stop()
         cap.release()
         ui.destroy()
         logger.info("Shut down cleanly")

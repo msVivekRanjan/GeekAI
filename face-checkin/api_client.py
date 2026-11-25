@@ -194,3 +194,60 @@ class APIClient:
         except requests.RequestException as exc:
             logger.debug("Photo download failed for participant %d: %s", participant_id, exc)
             return None
+
+    # ------------------------------------------------------------------ #
+    #  Offline Sync                                                       #
+    # ------------------------------------------------------------------ #
+
+    def health_check(self) -> bool:
+        """Ping the backend health endpoint. Returns True if online."""
+        try:
+            resp = self.session.get(
+                f"{self.base_url}/api/offline/health",
+                timeout=5,
+            )
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    def download_participants(self, event_id: int) -> list[dict[str, Any]]:
+        """Download all confirmed participants + embeddings for the event."""
+        url = f"{self.base_url}/api/offline/participants"
+        try:
+            resp = self.session.get(url, params={"event_id": event_id}, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("participants", [])
+        except requests.RequestException as exc:
+            logger.error("Failed to download participants: %s", exc)
+            return []
+
+    def download_sessions(self, event_id: int) -> list[dict[str, Any]]:
+        """Download sessions for the event."""
+        url = f"{self.base_url}/api/offline/sessions"
+        try:
+            resp = self.session.get(url, params={"event_id": event_id}, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("sessions", [])
+        except requests.RequestException as exc:
+            logger.error("Failed to download sessions: %s", exc)
+            return []
+
+    def sync_attendance_batch(self, records: list[dict], event_id: int) -> Optional[dict[str, Any]]:
+        """Submit a batch of offline attendance records for sync.
+
+        Returns the response dict on success, None on network failure.
+        """
+        url = f"{self.base_url}/api/offline/sync/attendance"
+        payload = {"records": records}
+        try:
+            resp = self.session.post(url, json=payload, timeout=30)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.ConnectionError:
+            logger.warning("Offline sync: network unavailable")
+            return None
+        except requests.RequestException as exc:
+            logger.error("Offline sync failed: %s", exc)
+            return None

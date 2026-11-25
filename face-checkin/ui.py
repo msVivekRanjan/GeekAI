@@ -45,6 +45,9 @@ class CheckInUI:
         self._embeddings_count = 0
         self._last_sync_display = "never"
         self._connected = False
+        self._pending_sync_count = 0
+        self._session_name = "Event Check-In"
+        self._mode = "FACE"
 
     # ------------------------------------------------------------------ #
     #  Window lifecycle                                                   #
@@ -65,10 +68,26 @@ class CheckInUI:
         self._status_msg = msg
         self._status_color = color
 
-    def set_connection_info(self, connected: bool, embeddings: int, last_sync: str) -> None:
+    def set_connection_info(
+        self,
+        connected: bool,
+        embeddings: int,
+        last_sync: str,
+        pending_count: Optional[int] = None,
+    ) -> None:
         self._connected = connected
         self._embeddings_count = embeddings
         self._last_sync_display = last_sync
+        if pending_count is not None:
+            self._pending_sync_count = pending_count
+
+    def set_sync_status(self, online: bool, pending_count: int) -> None:
+        self._connected = online
+        self._pending_sync_count = pending_count
+
+    def set_session_info(self, session_name: str, mode: str) -> None:
+        self._session_name = session_name
+        self._mode = mode
 
     def flash(self, msg: str, color: tuple = COL_GREEN, duration: float = 3.0) -> None:
         """Show a temporary message overlay."""
@@ -215,18 +234,22 @@ class CheckInUI:
     def _draw_controls_bar(self, canvas: np.ndarray, pending: bool) -> None:
         bar_y = self.height - 50
         cv2.rectangle(canvas, (0, bar_y), (self.width, bar_y + 20), COL_DARK_BG, -1)
-        controls = "[Q] Quit  [S] Sync  [M] Manual Lookup"
+        controls = "[Q] Quit  [S] Sync  [M] Manual  [R] Toggle QR/Face  [C] Session"
         if pending:
             controls = "[Y] Confirm  [N] Reject  " + controls
-        cv2.putText(canvas, controls, (10, bar_y + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.45, COL_WHITE, 1)
+        cv2.putText(canvas, controls, (10, bar_y + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.43, COL_WHITE, 1)
 
     def _draw_status_bar(self, canvas: np.ndarray) -> None:
         bar_y = self.height - 28
         cv2.rectangle(canvas, (0, bar_y), (self.width, self.height), COL_DARK_BG, -1)
 
-        conn_label = "Connected" if self._connected else "Disconnected"
+        conn_label = "ONLINE" if self._connected else "OFFLINE"
         conn_col = COL_GREEN if self._connected else COL_RED
-        status = f"API: {conn_label}  |  Embeddings: {self._embeddings_count}  |  Last sync: {self._last_sync_display}  |  {self._status_msg}"
+        status = (
+            f"{conn_label}  |  Pending: {self._pending_sync_count}  |  "
+            f"Mode: {self._mode}  |  Session: {self._session_name}  |  "
+            f"Faces: {self._embeddings_count}  |  {self._status_msg}"
+        )
         cv2.putText(canvas, status, (10, self.height - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.42, conn_col, 1)
 
     def _draw_flash(self, canvas: np.ndarray) -> None:

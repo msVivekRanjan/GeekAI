@@ -18,6 +18,9 @@ class Config:
     # Backend API
     API_URL: str = os.getenv("API_URL", "http://localhost:8000")
 
+    # Event ID for which this volunteer app is running
+    EVENT_ID: int = int(os.getenv("EVENT_ID", "1"))
+
     # Volunteer credentials for API authentication
     VOLUNTEER_EMAIL: str = os.getenv("VOLUNTEER_EMAIL", "volunteer@example.com")
     VOLUNTEER_PASSWORD: str = os.getenv("VOLUNTEER_PASSWORD", "password")
@@ -33,6 +36,7 @@ class Config:
 
     # Local cache directory (relative to face-checkin/)
     CACHE_DIR: str = os.getenv("CACHE_DIR", "cache")
+    SQLITE_DB: str = os.getenv("SQLITE_DB", "offline.db")
 
     # InsightFace model name
     MODEL_NAME: str = os.getenv("MODEL_NAME", "buffalo_l")
@@ -64,6 +68,11 @@ class Config:
     def embeddings_cache_file(cls) -> Path:
         """Return the path to the embeddings cache JSON file."""
         return cls.cache_path() / "embeddings_cache.json"
+
+    @classmethod
+    def sqlite_db_path(cls) -> Path:
+        """Return the path to the local SQLite database file."""
+        return cls.cache_path() / cls.SQLITE_DB
 
 
 # Singleton instance

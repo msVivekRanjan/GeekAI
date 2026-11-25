@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -494,6 +495,42 @@ class ValidateCouponResponse(BaseModel):
     code: str
     message: str
     event_name: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Offline Sync
+# ---------------------------------------------------------------------------
+
+class OfflineAttendanceRecord(BaseModel):
+    """A single attendance record submitted from the offline volunteer app."""
+    local_uuid: UUID
+    participant_id: int
+    session_id: Optional[int] = None
+    method: str  # FACE | QR | MANUAL
+    marked_at: Optional[str] = None  # ISO timestamp
+    event_id: int
+
+
+class OfflineSyncBatch(BaseModel):
+    """Batch of offline attendance records to sync."""
+    records: List[OfflineAttendanceRecord]
+
+
+class OfflineSyncResult(BaseModel):
+    """Per-record result from an offline sync batch."""
+    local_uuid: UUID
+    status: str  # synced | already_synced | duplicate | error
+    message: str = ""
+    attendance_id: Optional[int] = None
+
+
+class OfflineSyncResponse(BaseModel):
+    """Response from the batch sync endpoint."""
+    total: int
+    synced: int
+    skipped: int
+    errors: int
+    results: List[OfflineSyncResult]
 
 
 # ---------------------------------------------------------------------------

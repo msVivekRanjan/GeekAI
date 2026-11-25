@@ -18,6 +18,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, relationship
 
@@ -163,6 +164,10 @@ class Attendance(Base):
     marked_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     marked_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     event_id = Column(Integer, ForeignKey("events.id"), nullable=False, default=1, index=True)
+    # Offline sync columns
+    local_uuid = Column(PG_UUID(as_uuid=True), nullable=True, unique=False, index=True)
+    sync_source = Column(String(20), nullable=False, default="cloud")
+    synced_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     participant = relationship("Participant", back_populates="attendances")

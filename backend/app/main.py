@@ -76,6 +76,7 @@ from app.api.attendance import router as attendance_router  # noqa: E402
 from app.api.auth import router as auth_router  # noqa: E402
 from app.api.embeddings import router as embeddings_router  # noqa: E402
 from app.api.events import router as events_router  # noqa: E402
+from app.api.offline_sync import router as offline_sync_router  # noqa: E402
 from app.api.participants import router as participants_router  # noqa: E402
 from app.api.payments import router as payments_router  # noqa: E402
 from app.api.sessions import router as sessions_router  # noqa: E402
@@ -92,6 +93,7 @@ app.include_router(events_router)
 app.include_router(payments_router)
 app.include_router(storage_router)
 app.include_router(super_admin_router)
+app.include_router(offline_sync_router)
 
 
 @app.get("/", tags=["health"])

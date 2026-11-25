@@ -1,0 +1,21 @@
+# Local-only volunteer desktop application (never deployed to Vercel)
+face-checkin/
+
+# Local development & container files
+docker-compose*.yml
+.env
+.env.local
+.env.*.local
+backend/uploads/
+frontend/node_modules/
+frontend/dist/
+tasks/
+
+# Python / OS caches
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+.venv/
+venv/
+.DS_Store
+*.log

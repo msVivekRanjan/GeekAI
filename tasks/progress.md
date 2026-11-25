@@ -176,3 +176,28 @@
 - **Verification**:
   - Frontend built (`npm run build`, 2,552 modules, 0 errors) and containers deployed (`geekai-backend`, `geekai-frontend`).
   - Automated E2E verification passed all 7 checks: R2 secret masking, S3v4 presigned URLs & prefixes across all categories, upload validation & auth checks, local fallback mode, participant photo/QR/embedding/document registration, deletion cleanup, and OAIC backward compatibility.
+
+
+### 9. Cloud Deployment Gating, Offline Volunteer App & Batch Sync (Complete ✅)
+- **1. Cloud Deployment Route Gating**:
+  - Updated `frontend/src/App.jsx` to conditionally exclude `/volunteer/*` and `/volunteer/login` routes when `VITE_DEPLOYMENT_MODE=cloud`, using `React.lazy` + `Suspense` so volunteer chunks are excluded from cloud builds.
+  - Updated `vercel.json` `services.frontend.buildCommand` to `VITE_DEPLOYMENT_MODE=cloud npm run build`.
+  - Added `.vercelignore` to exclude `face-checkin/`, `tasks/`, `backend/uploads/`, `.env`, and Docker configs from Vercel uploads.
+  - Removed `insightface`, `onnxruntime`, and `opencv-python-headless` from `backend/requirements.txt` so the FastAPI service stays under Vercel's 250 MB serverless bundle limit (`embedding_service.py` falls back gracefully; local face recognition runs in `face-checkin/`).
+- **2. Backend Offline Sync APIs & Migration (`008_offline_sync.py`)**:
+  - Added `local_uuid` (UUID, partial unique index `uq_attendance_local_uuid`), `sync_source` (`cloud` | `offline`), and `synced_at` to `attendance` table and `Attendance` ORM model.
+  - Created `backend/app/api/offline_sync.py` (registered in `backend/app/main.py`) with:
+    - `GET /api/offline/health` — connectivity probe.
+    - `GET /api/offline/participants` — downloads confirmed participants + 512-d embeddings for pre-event caching (event-scoped).
+    - `GET /api/offline/sessions` — downloads event sessions (event-scoped).
+    - `POST /api/offline/sync/attendance` — batch sync with `local_uuid` idempotency, savepoint isolation per record, duplicate prevention, and volunteer event-scope enforcement.
+- **3. Standalone Offline Volunteer Application (`face-checkin/`)**:
+  - Created `face-checkin/local_db.py`: SQLite WAL database (`participants`, `sessions`, `attendance_queue`, `volunteer_cache`).
+  - Created `face-checkin/qr_scanner.py`: OpenCV/pyzbar QR decoding, multi-format participant ID extraction, local SQLite lookup, and queued attendance recording.
+  - Created `face-checkin/offline_sync.py`: Background daemon thread checking `/api/offline/health` and batch-syncing `PENDING`/`FAILED` records.
+  - Updated `face-checkin/config.py`, `face-checkin/requirements.txt`, `face-checkin/api_client.py`, `face-checkin/sync.py`, `face-checkin/ui.py`, and `face-checkin/main.py` with offline auth cache fallback, session selection (`[C]`), Face/QR mode toggle (`[R]`), offline-first manual lookup (`[M]`), and live Online/Offline + Pending sync status bar.
+- **Verification**:
+  - Applied migration `008_offline_sync` in PostgreSQL (`geekai-postgres`) and verified columns/index.
+  - Verified frontend builds cleanly in both default mode (1.77s) and `VITE_DEPLOYMENT_MODE=cloud` (1.48s, volunteer chunks excluded).
+  - Tested `/api/offline/health`, `/api/offline/participants`, `/api/offline/sessions`, and `/api/offline/sync/attendance` (synced, idempotent `already_synced`, `duplicate`, and per-record error isolation).
+  - Verified `face-checkin` Python compilation and unit-tested `local_db.py` + `qr_scanner.py` in `face-checkin/venv`.

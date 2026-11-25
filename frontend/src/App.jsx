@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import AdminLayout from './components/AdminLayout'
@@ -16,18 +17,25 @@ import Attendance from './pages/admin/Attendance'
 import Export from './pages/admin/Export'
 import Volunteers from './pages/admin/Volunteers'
 import Coupons from './pages/admin/Coupons'
-import VolunteerDashboard from './pages/volunteer/VolunteerDashboard'
-import FaceCheckIn from './pages/volunteer/FaceCheckIn'
-import QRScanner from './pages/volunteer/QRScanner'
-import ManualLookup from './pages/volunteer/ManualLookup'
 import SuperAdminDashboard from './pages/super-admin/Dashboard'
 import SuperAdminEvents from './pages/super-admin/Events'
 import EventEditor from './pages/super-admin/EventEditor'
 import FormBuilder from './pages/super-admin/FormBuilder'
 
+// Volunteer pages are excluded from the cloud deployment.
+// In cloud mode (VITE_DEPLOYMENT_MODE=cloud), these routes are not registered.
+const IS_CLOUD = import.meta.env.VITE_DEPLOYMENT_MODE === 'cloud'
+
+// Lazy-import volunteer pages only in non-cloud mode to keep cloud bundle clean.
+const VolunteerDashboard = !IS_CLOUD ? lazy(() => import('./pages/volunteer/VolunteerDashboard')) : null
+const FaceCheckIn = !IS_CLOUD ? lazy(() => import('./pages/volunteer/FaceCheckIn')) : null
+const QRScanner = !IS_CLOUD ? lazy(() => import('./pages/volunteer/QRScanner')) : null
+const ManualLookup = !IS_CLOUD ? lazy(() => import('./pages/volunteer/ManualLookup')) : null
+
 export default function App() {
   return (
-    <Routes>
+    <Suspense fallback={null}>
+      <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
         <Route path="/register" element={<Register />} />
@@ -37,7 +45,7 @@ export default function App() {
       <Route element={<Layout login />}>
         <Route path="/login" element={<Login />} />
         <Route path="/admin/login" element={<Login />} />
-        <Route path="/volunteer/login" element={<Login />} />
+        {!IS_CLOUD && <Route path="/volunteer/login" element={<Login />} />}
       </Route>
 
       {/* Super Admin routes */}
@@ -77,23 +85,26 @@ export default function App() {
         <Route path="export" element={<Export />} />
       </Route>
 
-      {/* Volunteer routes */}
-      <Route
-        path="/volunteer"
-        element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'VOLUNTEER']}>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Navigate to="dashboard" replace />} />
-        <Route path="dashboard" element={<VolunteerDashboard />} />
-        <Route path="face-checkin" element={<FaceCheckIn />} />
-        <Route path="scan" element={<QRScanner />} />
-        <Route path="manual" element={<ManualLookup />} />
-      </Route>
+      {/* Volunteer routes — excluded from cloud deployment */}
+      {!IS_CLOUD && VolunteerDashboard && (
+        <Route
+          path="/volunteer"
+          element={
+            <ProtectedRoute allowedRoles={['ADMIN', 'VOLUNTEER']}>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<VolunteerDashboard />} />
+          <Route path="face-checkin" element={<FaceCheckIn />} />
+          <Route path="scan" element={<QRScanner />} />
+          <Route path="manual" element={<ManualLookup />} />
+        </Route>
+      )}
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   )
 }
