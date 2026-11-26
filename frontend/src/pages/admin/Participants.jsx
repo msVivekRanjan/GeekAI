@@ -8,7 +8,7 @@ import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import { Search, ChevronLeft, ChevronRight, Pencil, Trash2, X, Save, Eye } from 'lucide-react'
-import { getCategoryColor, formatShortDate, resolveMediaUrl } from '../../utils/helpers'
+import { formatShortDate } from '../../utils/helpers'
 
 const CATEGORIES = ['STUDENT', 'RESEARCHER', 'PROFESSIONAL', 'SPEAKER', 'OTHER']
 const PAYMENT_STATUSES = ['SUCCESS', 'PENDING', 'FAILED']
@@ -34,6 +34,12 @@ export default function Participants() {
   })
   const [editError, setEditError] = useState('')
 
+  const { data: eventSettings } = useQuery({
+    queryKey: ['admin-event-settings'],
+    queryFn: () => client.get('/admin/event/form-schema').then((r) => r.data),
+  })
+  const cashfreeEnabled = Boolean(eventSettings?.cashfree_enabled)
+
   const { data, isLoading } = useQuery({
     queryKey: ['participants', search, category, page],
     queryFn: () =>
@@ -44,6 +50,7 @@ export default function Participants() {
             category: category || undefined,
             skip: page * limit,
             limit,
+            include_media: false,
           },
         })
         .then((r) => r.data),
@@ -96,35 +103,6 @@ export default function Participants() {
   }
 
   const columns = [
-    {
-      key: 'photo',
-      label: 'Photo',
-      render: (_, row) => {
-        const photoSrc = resolveMediaUrl(row.photo_url)
-        return (
-          <div className="flex items-center justify-center w-9 h-9">
-            {photoSrc ? (
-              <img
-                src={photoSrc}
-                alt={row.name}
-                className="w-9 h-9 rounded-full object-cover border border-gray-200"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none'
-                  const fallback = e.currentTarget.nextElementSibling
-                  if (fallback) fallback.style.display = 'flex'
-                }}
-              />
-            ) : null}
-            <div
-              className="w-9 h-9 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 font-semibold text-xs flex items-center justify-center uppercase"
-              style={{ display: photoSrc ? 'none' : 'flex' }}
-            >
-              {row.name?.charAt(0) || '?'}
-            </div>
-          </div>
-        )
-      },
-    },
     { key: 'id', label: 'ID' },
     {
       key: 'name',
@@ -137,28 +115,27 @@ export default function Participants() {
       ),
     },
     { key: 'institution', label: 'Institution', render: (v) => v || '—' },
-    {
-      key: 'category',
-      label: 'Category',
-      render: (v) => <Badge className={getCategoryColor(v)}>{v}</Badge>,
-    },
-    {
-      key: 'payment_status',
-      label: 'Payment',
-      render: (v) => (
-        <Badge
-          className={
-            v === 'SUCCESS'
-              ? 'bg-emerald-100 text-emerald-800'
-              : v === 'FAILED'
-              ? 'bg-rose-100 text-rose-800'
-              : 'bg-amber-100 text-amber-800'
-          }
-        >
-          {v || 'PENDING'}
-        </Badge>
-      ),
-    },
+    ...(cashfreeEnabled
+      ? [
+          {
+            key: 'payment_status',
+            label: 'Payment',
+            render: (v) => (
+              <Badge
+                className={
+                  v === 'SUCCESS'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : v === 'FAILED'
+                    ? 'bg-rose-100 text-rose-800'
+                    : 'bg-amber-100 text-amber-800'
+                }
+              >
+                {v || 'PENDING'}
+              </Badge>
+            ),
+          },
+        ]
+      : []),
     {
       key: 'registered_at',
       label: 'Registered',
@@ -345,18 +322,20 @@ export default function Participants() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Payment Status</label>
-                  <select
-                    value={editForm.payment_status}
-                    onChange={(e) => setEditForm({ ...editForm, payment_status: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
-                  >
-                    {PAYMENT_STATUSES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
+                {cashfreeEnabled && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Payment Status</label>
+                    <select
+                      value={editForm.payment_status}
+                      onChange={(e) => setEditForm({ ...editForm, payment_status: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
+                    >
+                      {PAYMENT_STATUSES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">

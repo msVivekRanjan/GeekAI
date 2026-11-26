@@ -220,3 +220,18 @@
   - Built frontend (`npm run build`, 2,551 modules, 0 errors, no `FaceCheckIn` chunk).
   - Uninstalled `pgvector` and `numpy` in `geekai-backend`, applied `009_remove_face_recognition`, and verified `vector` extension and `face_embeddings` table are removed.
   - Verified `/health`, `/api/attendance/face-match` (404/405), `/api/embeddings/sync` (404), Super Admin dashboard, participant registration, QR generation, and QR attendance recording end-to-end.
+
+
+### 12. Event Admin Dashboard — No Photos in Participants Tab, Fixed Sidebar & Conditional Columns (Complete ✅)
+- **Participants Tab — Remove Photos & Media Payload (`Participants.jsx`, `participants.py`)**:
+  - Removed the `Photo` column and all `photo_url` / `resolveMediaUrl` rendering from `frontend/src/pages/admin/Participants.jsx`, eliminating R2 image requests when loading the Participants tab.
+  - Added `include_media: bool = True` query param to `GET /api/participants/` in `backend/app/api/participants.py`; `Participants.jsx` passes `include_media: false` so media URLs/object keys are omitted from the list payload to reduce API response size.
+- **Fixed Event Admin Sidebar (`AdminLayout.jsx`)**:
+  - Updated `frontend/src/components/AdminLayout.jsx` (`lg:h-screen lg:overflow-hidden` wrapper, sticky/fixed `h-screen` sidebar with `shrink-0`, and independent `overflow-y-auto` main content area) while preserving responsive mobile header and horizontal nav.
+- **Conditional Table Columns & Payment UI (`Participants.jsx`, `admin.py`)**:
+  - Removed the `Category` column from the Participants table.
+  - Added `cashfree_enabled` to `GET /api/admin/event/form-schema` in `backend/app/api/admin.py`.
+  - Conditionally render the `Payment` table column and the Edit Modal's `Payment Status` field in `Participants.jsx` only when `cashfree_enabled` is true for the event.
+- **Verification**:
+  - Built frontend (`npm run build` and `VITE_DEPLOYMENT_MODE=cloud npm run build`).
+  - Verified `GET /api/admin/event/form-schema` (`cashfree_enabled`) and `GET /api/participants/?include_media=false` (omits `photo_url` / `qr_code_url` / `*_object_key`) against `geekai-backend`.

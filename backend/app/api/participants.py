@@ -366,6 +366,7 @@ async def list_participants(
     category: Optional[ParticipantCategory] = None,
     skip: int = 0,
     limit: int = 50,
+    include_media: bool = True,
     db: AsyncSession = Depends(get_db),
     _staff: User = Depends(get_current_staff),
 ):
@@ -397,6 +398,14 @@ async def list_participants(
     result = await db.execute(query)
     items = result.scalars().all()
 
+    out_items = [ParticipantOut.model_validate(p) for p in items]
+    if not include_media:
+        for item in out_items:
+            item.photo_url = None
+            item.qr_code_url = None
+            item.photo_object_key = None
+            item.qr_object_key = None
+
     await _audit(
         db,
         request,
@@ -404,7 +413,7 @@ async def list_participants(
         _staff,
         after={"count": len(items), "event_id": _staff.event_id},
     )
-    return ParticipantList(total=total, items=[ParticipantOut.model_validate(p) for p in items])
+    return ParticipantList(total=total, items=out_items)
 
 
 @router.get("/{participant_id}", response_model=ParticipantDetail)

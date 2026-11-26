@@ -132,6 +132,7 @@ async def get_admin_event_form_schema(
     return {
         "event_id": event.id,
         "event_name": event.name,
+        "cashfree_enabled": bool(event.cashfree_enabled),
         "schema": event.registration_form_schema,
     }
 
