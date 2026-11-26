@@ -302,16 +302,6 @@ async def delete_volunteer(
         text("UPDATE attendance SET marked_by = :admin_id WHERE marked_by = :vol_id"),
         {"admin_id": admin.id, "vol_id": volunteer_id},
     )
-    # Clear any verified_by references
-    await db.execute(
-        text("UPDATE attendance SET verified_by = NULL WHERE verified_by = :vol_id"),
-        {"vol_id": volunteer_id},
-    )
-    # Remove any qr_tokens issued by this volunteer
-    await db.execute(
-        text("DELETE FROM qr_tokens WHERE issued_by = :vol_id"),
-        {"vol_id": volunteer_id},
-    )
 
     await _audit(db, request, "VOLUNTEER_DELETED", admin, "user", str(volunteer_id), {"email": user.email, "name": user.name})
     await db.delete(user)
