@@ -36,14 +36,6 @@ class UserRole(str, enum.Enum):
     VOLUNTEER = "VOLUNTEER"
 
 
-class ParticipantCategory(str, enum.Enum):
-    STUDENT = "STUDENT"
-    RESEARCHER = "RESEARCHER"
-    PROFESSIONAL = "PROFESSIONAL"
-    SPEAKER = "SPEAKER"
-    OTHER = "OTHER"
-
-
 class AttendanceMethod(str, enum.Enum):
     QR = "QR"
     MANUAL = "MANUAL"
@@ -83,11 +75,7 @@ class Participant(Base):
     email = Column(String(320), nullable=False, index=True)
     phone = Column(String(20), nullable=True)
     institution = Column(String(255), nullable=True)
-    category = Column(
-        Enum(ParticipantCategory, name="participant_category"),
-        nullable=False,
-        default=ParticipantCategory.OTHER,
-    )
+    category = Column(String(100), nullable=False, default="OTHER")
     photo_url = Column(String(512), nullable=True)
     qr_code_url = Column(String(512), nullable=True)
     photo_object_key = Column(String(512), nullable=True)

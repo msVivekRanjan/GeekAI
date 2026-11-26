@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.rate_limit import reset_rate_limits
 from app.core.security import create_access_token, hash_password, token_claims
 from app.models.audit import AuditLog
-from app.models.models import Participant, ParticipantCategory, User, UserRole
+from app.models.models import Participant, User, UserRole
 from tests.conftest import TEST_BOOTSTRAP_TOKEN
 
 PII_ROUTES = [

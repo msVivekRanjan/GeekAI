@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
 
-from app.models.models import AttendanceMethod, ParticipantCategory, UserRole
+from app.models.models import AttendanceMethod, UserRole
 
 
 # ===== Auth =================================================================
@@ -109,7 +109,7 @@ class ParticipantCreate(BaseModel):
     email: EmailStr
     phone: Optional[str] = None
     institution: Optional[str] = None
-    category: ParticipantCategory = ParticipantCategory.OTHER
+    category: str = Field(default="OTHER", min_length=1, max_length=100)
     coupon_code: Optional[str] = None
 
 
@@ -119,7 +119,7 @@ class ParticipantOut(BaseModel):
     email: str
     phone: Optional[str] = None
     institution: Optional[str] = None
-    category: ParticipantCategory
+    category: str
     photo_url: Optional[str] = None
     qr_code_url: Optional[str] = None
     photo_object_key: Optional[str] = None
@@ -153,7 +153,7 @@ class ParticipantUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     institution: Optional[str] = None
-    category: Optional[ParticipantCategory] = None
+    category: Optional[str] = Field(default=None, min_length=1, max_length=100)
     payment_status: Optional[str] = None
     status: Optional[str] = None
 

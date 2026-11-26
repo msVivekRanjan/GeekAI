@@ -19,7 +19,6 @@ from app.models.models import (
     Coupon,
     Event,
     Participant,
-    ParticipantCategory,
     Session,
     User,
     UserRole,
@@ -92,7 +91,10 @@ async def dashboard(
     if _admin.event_id:
         cat_stmt = cat_stmt.where(Participant.event_id == _admin.event_id)
     cat_result = await db.execute(cat_stmt)
-    by_category = {row[0].value: row[1] for row in cat_result.all()}
+    by_category = {
+        (row[0].value if hasattr(row[0], "value") else str(row[0] or "OTHER")): row[1]
+        for row in cat_result.all()
+    }
 
     # Recent registrations (last 10)
     recent_stmt = select(Participant).order_by(Participant.registered_at.desc()).limit(10)
@@ -486,7 +488,7 @@ async def export_participants(
             p.email,
             p.phone or "",
             p.institution or "",
-            p.category.value,
+            p.category.value if hasattr(p.category, "value") else str(p.category or ""),
             p.payment_status or "PENDING",
             p.coupon_code or "",
             p.registered_at.isoformat(),
@@ -581,7 +583,7 @@ async def export_excel(
             p.email,
             p.phone or "",
             p.institution or "",
-            p.category.value,
+            p.category.value if hasattr(p.category, "value") else str(p.category or ""),
             p.payment_status or "PENDING",
             p.coupon_code or "",
             p.registered_at.strftime("%Y-%m-%d %H:%M:%S"),

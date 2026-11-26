@@ -23,7 +23,6 @@ from app.models.models import (
     Attendance,
     AttendanceMethod,
     Participant,
-    ParticipantCategory,
     Session,
     User,
     UserRole,
@@ -45,7 +44,7 @@ async def _participant(db: AsyncSession, event_id: int, email: str, **kwargs) ->
     p = Participant(
         name="Synthetic Participant",
         email=email,
-        category=ParticipantCategory.STUDENT,
+        category="STUDENT",
         event_id=event_id,
         source=kwargs.pop("source", ParticipantSource.ADMIN),
         status=kwargs.pop("status", ParticipantStatus.IMPORTED),

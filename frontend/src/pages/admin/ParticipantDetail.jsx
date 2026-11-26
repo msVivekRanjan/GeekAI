@@ -518,7 +518,10 @@ export default function ParticipantDetail() {
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
                     className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                   >
-                    {CATEGORIES.map((c) => (
+                    {(form.category && !CATEGORIES.includes(form.category)
+                      ? [form.category, ...CATEGORIES]
+                      : CATEGORIES
+                    ).map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>

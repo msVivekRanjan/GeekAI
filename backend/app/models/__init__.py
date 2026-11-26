@@ -7,7 +7,6 @@ from app.models.models import (
     Coupon,
     Event,
     Participant,
-    ParticipantCategory,
     Session,
     User,
     UserRole,
@@ -16,7 +15,6 @@ from app.models.models import (
 __all__ = [
     "Base",
     "UserRole",
-    "ParticipantCategory",
     "AttendanceMethod",
     "User",
     "Participant",

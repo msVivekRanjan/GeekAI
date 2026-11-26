@@ -10,8 +10,23 @@ import Spinner from '../../components/ui/Spinner'
 import { Search, ChevronLeft, ChevronRight, Pencil, Trash2, X, Save, Eye } from 'lucide-react'
 import { formatShortDate } from '../../utils/helpers'
 
-const CATEGORIES = ['STUDENT', 'RESEARCHER', 'PROFESSIONAL', 'SPEAKER', 'OTHER']
+const DEFAULT_CATEGORIES = ['STUDENT', 'RESEARCHER', 'PROFESSIONAL', 'SPEAKER', 'OTHER']
 const PAYMENT_STATUSES = ['SUCCESS', 'PENDING', 'FAILED']
+
+function extractEventCategories(schema) {
+  const fields = schema?.fields
+  if (!Array.isArray(fields)) return DEFAULT_CATEGORIES
+  const catField = fields.find(
+    (f) => f?.mapping === 'category' || f?.id === 'category' || f?.label?.toLowerCase().includes('category')
+  )
+  if (!catField || !Array.isArray(catField.options) || catField.options.length === 0) {
+    return DEFAULT_CATEGORIES
+  }
+  const vals = catField.options
+    .map((opt) => (typeof opt === 'object' ? opt.value || opt.label : opt))
+    .filter(Boolean)
+  return vals.length > 0 ? vals : DEFAULT_CATEGORIES
+}
 
 export default function Participants() {
   const navigate = useNavigate()
@@ -39,6 +54,7 @@ export default function Participants() {
     queryFn: () => client.get('/admin/event/form-schema').then((r) => r.data),
   })
   const cashfreeEnabled = Boolean(eventSettings?.cashfree_enabled)
+  const categoryOptions = extractEventCategories(eventSettings?.schema)
 
   const { data, isLoading } = useQuery({
     queryKey: ['participants', search, category, page],
@@ -201,7 +217,7 @@ export default function Participants() {
           className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
         >
           <option value="">All Categories</option>
-          {CATEGORIES.map((c) => (
+          {categoryOptions.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
@@ -316,7 +332,10 @@ export default function Participants() {
                     onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
                     className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white"
                   >
-                    {CATEGORIES.map((c) => (
+                    {(editForm.category && !categoryOptions.includes(editForm.category)
+                      ? [editForm.category, ...categoryOptions]
+                      : categoryOptions
+                    ).map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>

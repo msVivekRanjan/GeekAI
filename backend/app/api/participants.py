@@ -31,7 +31,6 @@ from app.models.models import (
     Coupon,
     Event,
     Participant,
-    ParticipantCategory,
     StoredFile,
     User,
 )
@@ -72,6 +71,69 @@ async def _audit(
     )
 
 
+LEGACY_CATEGORIES = ("STUDENT", "RESEARCHER", "PROFESSIONAL", "SPEAKER", "OTHER")
+
+
+def _extract_event_category_field(event: Optional[Event]) -> tuple[bool, list[str], bool]:
+    """Return (has_custom_schema, allowed_values, is_required) for an event's category field."""
+    schema = getattr(event, "registration_form_schema", None) if event else None
+    if not isinstance(schema, dict) or not isinstance(schema.get("fields"), list):
+        return False, list(LEGACY_CATEGORIES), False
+
+    for field in schema["fields"]:
+        if not isinstance(field, dict):
+            continue
+        mapping = str(field.get("mapping") or "").strip().lower()
+        fid = str(field.get("id") or "").strip().lower()
+        label = str(field.get("label") or "").strip().lower()
+        if mapping == "category" or fid == "category" or "category" in label:
+            options = field.get("options") or []
+            values: list[str] = []
+            for opt in options:
+                if isinstance(opt, dict):
+                    val = str(opt.get("value") or opt.get("label") or "").strip()
+                else:
+                    val = str(opt).strip()
+                if val:
+                    values.append(val)
+            if values:
+                return True, values, bool(field.get("required"))
+    return True, [], False
+
+
+def _validate_event_category(event: Optional[Event], raw_category: Optional[str]) -> str:
+    """Validate and normalize participant category against the event's configured categories."""
+    cat = (raw_category or "OTHER").strip() or "OTHER"
+    if len(cat) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Category must be at most 100 characters",
+        )
+
+    has_custom_schema, allowed, is_required = _extract_event_category_field(event)
+    if not has_custom_schema:
+        lookup = {v.upper(): v for v in LEGACY_CATEGORIES}
+        if cat.upper() in lookup:
+            return lookup[cat.upper()]
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid category '{cat}'. Must be one of: {', '.join(LEGACY_CATEGORIES)}",
+        )
+
+    if allowed:
+        lookup = {v.lower(): v for v in allowed}
+        if cat.lower() in lookup:
+            return lookup[cat.lower()]
+        if not is_required and cat.upper() == "OTHER":
+            return "OTHER"
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid category '{cat}' for this event. Must be one of: {', '.join(allowed)}",
+        )
+
+    return cat
+
+
 @router.post("/", response_model=ParticipantOut, status_code=status.HTTP_201_CREATED)
 async def register_participant(
     background_tasks: BackgroundTasks,
@@ -80,7 +142,7 @@ async def register_participant(
     email: Optional[str] = Form(None),
     phone: Optional[str] = Form(None),
     institution: Optional[str] = Form(None),
-    category: ParticipantCategory = Form(ParticipantCategory.OTHER),
+    category: str = Form("OTHER"),
     photo: Optional[UploadFile] = File(None),
     photo_url: Optional[str] = Form(None),
     photo_object_key: Optional[str] = Form(None),
@@ -181,9 +243,10 @@ async def register_participant(
     final_payment_order_id = payment_order_id.strip() if payment_order_id else None
     final_coupon_code = None
 
-    # Load target event to determine payment requirements
+    # Load target event to determine payment requirements & validate category
     evt_res = await db.execute(select(Event).where(Event.id == target_event_id))
     evt = evt_res.scalar_one_or_none()
+    resolved_category = _validate_event_category(evt, resolved_category)
     is_free_or_cashfree_disabled = bool(evt and (not evt.cashfree_enabled or evt.registration_fee == 0))
 
     if is_free_or_cashfree_disabled:
@@ -363,7 +426,7 @@ async def register_participant(
 async def list_participants(
     request: Request,
     search: Optional[str] = None,
-    category: Optional[ParticipantCategory] = None,
+    category: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
     include_media: bool = True,
