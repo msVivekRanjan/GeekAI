@@ -17,8 +17,8 @@ from app.models import Base
 # Alembic Config object
 config = context.config
 
-# Override sqlalchemy.url from application settings (supports Neon direct URLs)
-config.set_main_option("sqlalchemy.url", settings.async_database_url)
+# Override sqlalchemy.url from application settings (prefers MIGRATION_DATABASE_URL)
+config.set_main_option("sqlalchemy.url", settings.migration_database_url)
 
 # Logging
 if config.config_file_name is not None:

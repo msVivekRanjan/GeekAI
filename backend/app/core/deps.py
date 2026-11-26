@@ -34,6 +34,8 @@ _engine_kwargs: dict = {
 if settings.is_serverless_db:
     _engine_kwargs["poolclass"] = NullPool
 else:
+    _engine_kwargs["pool_size"] = settings.DB_POOL_SIZE
+    _engine_kwargs["max_overflow"] = settings.DB_MAX_OVERFLOW
     _engine_kwargs["pool_pre_ping"] = True
     _engine_kwargs["pool_recycle"] = 300
 

@@ -24,11 +24,14 @@ class Settings(BaseSettings):
 
     # Database — placeholder is intentionally unusable.
     DATABASE_URL: str = "postgresql+asyncpg://<user>:<password>@localhost:5432/geekai"
+    # Optional direct (non-pooled) URL used by Alembic migrations against Neon.
+    MIGRATION_DATABASE_URL: str = ""
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 5
 
-    @property
-    def async_database_url(self) -> str:
-        """Normalize DATABASE_URL for asyncpg, stripping libpq-only query params."""
-        url = self.DATABASE_URL.strip()
+    @staticmethod
+    def _normalize_async_url(raw_url: str) -> str:
+        url = raw_url.strip()
         if url.startswith("postgres://"):
             url = "postgresql+asyncpg://" + url[len("postgres://"):]
         elif url.startswith("postgresql://"):
@@ -43,17 +46,27 @@ class Settings(BaseSettings):
         return url
 
     @property
+    def async_database_url(self) -> str:
+        """Normalize DATABASE_URL for asyncpg, stripping libpq-only query params."""
+        return self._normalize_async_url(self.DATABASE_URL)
+
+    @property
+    def migration_database_url(self) -> str:
+        """Use MIGRATION_DATABASE_URL (Neon direct) if set, else DATABASE_URL."""
+        return self._normalize_async_url(self.MIGRATION_DATABASE_URL or self.DATABASE_URL)
+
+    @property
     def async_connect_args(self) -> Dict[str, Any]:
         """Pass SSL context to asyncpg when connecting to Neon or sslmode=require."""
-        raw = self.DATABASE_URL.lower()
+        raw = (self.MIGRATION_DATABASE_URL or self.DATABASE_URL).lower()
         if "sslmode=require" in raw or "neon.tech" in raw:
             return {"ssl": "require"}
         return {}
 
     @property
     def is_serverless_db(self) -> bool:
-        """True when running in Vercel serverless or targeting a Neon pooler."""
-        return bool(os.getenv("VERCEL")) or "-pooler" in self.DATABASE_URL
+        """True only when running in serverless functions (Vercel) or USE_NULL_POOL=true."""
+        return bool(os.getenv("VERCEL")) or os.getenv("USE_NULL_POOL", "").lower() == "true"
 
     # JWT — placeholder is intentionally unusable. Generate a real secret and
     # supply it via the environment or a secrets manager.

@@ -56,10 +56,14 @@ export function resolveMediaUrl(url) {
   if (
     url.startsWith('http://') ||
     url.startsWith('https://') ||
-    url.startsWith('data:') ||
-    url.startsWith('/')
+    url.startsWith('data:')
   ) {
     return url
   }
-  return `/${url}`
+  const path = url.startsWith('/') ? url : `/${url}`
+  const apiOrigin = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '')
+  if (apiOrigin && (path.startsWith('/api/') || path.startsWith('/uploads/'))) {
+    return `${apiOrigin}${path}`
+  }
+  return path
 }
