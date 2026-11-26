@@ -1,7 +1,10 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
-const rawApiBase = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '')
+const rawApiBase = import.meta.env.VITE_API_BASE_URL
+  ?.trim()
+  .replace(/\/+$/, '')
+  .replace(/\/api$/, '')
 
 const client = axios.create({
   baseURL: rawApiBase ? `${rawApiBase}/api` : '/api',

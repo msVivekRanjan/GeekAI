@@ -61,7 +61,10 @@ export function resolveMediaUrl(url) {
     return url
   }
   const path = url.startsWith('/') ? url : `/${url}`
-  const apiOrigin = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '')
+  const apiOrigin = import.meta.env.VITE_API_BASE_URL
+    ?.trim()
+    .replace(/\/+$/, '')
+    .replace(/\/api$/, '')
   if (apiOrigin && (path.startsWith('/api/') || path.startsWith('/uploads/'))) {
     return `${apiOrigin}${path}`
   }

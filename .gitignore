@@ -27,6 +27,9 @@ dist/
 !.env.example
 *.pem
 *.key
+*cloudflared*
+tunnel*.json
+credentials*.json
 
 # Local uploads & cache (preserve directory structure via .gitkeep)
 uploads/*
